@@ -1,0 +1,36 @@
+# Dependencies and generated build output
+/node_modules/
+/dist/
+/src-tauri/target/
+
+# Test and coverage output
+/playwright-report/
+/test-results/
+/coverage/
+
+# Local IDE and OS files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+
+# Generated artifacts — must NOT be committed (per security spec §18.5)
+*.stk
+/export/
+/exports/
+/sd-export/
+
+# Local user preference / recent list — never versioned
+/recent.json
+/user-prefs.json
+
+# Secrets: commit a documented .env.example instead
+.env
+.env.*
+!.env.example
+*secret*
+*.token
+
+# Kiro local configuration and temporary files
+.kiro/

@@ -1,0 +1,94 @@
+{
+  "device": "SmplTrek",
+  "firmware": "3.2",
+  "viewBox": { "width": 635, "height": 738 },
+  "referenceImage": "docs/SmplTrek_v3_Reference-Manual_en_r2.pdf",
+  "svgSource": "docs/SmplTrek_vectorized.svg",
+  "controls": {
+    "pads": [
+      { "id": 1,  "x": 48,  "y": 639, "width": 34, "height": 34, "type": "pad", "row": 4, "col": 1 },
+      { "id": 2,  "x": 120, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 4, "col": 2 },
+      { "id": 3,  "x": 192, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 4, "col": 3 },
+      { "id": 4,  "x": 264, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 4, "col": 4 },
+      { "id": 5,  "x": 335, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 3, "col": 1 },
+      { "id": 6,  "x": 406, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 3, "col": 2 },
+      { "id": 7,  "x": 478, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 3, "col": 3 },
+      { "id": 8,  "x": 549, "y": 639, "width": 34, "height": 34, "type": "pad", "row": 3, "col": 4 },
+      { "id": 9,  "x": 48,  "y": 568, "width": 34, "height": 34, "type": "pad", "row": 2, "col": 1 },
+      { "id": 10, "x": 120, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 2, "col": 2 },
+      { "id": 11, "x": 192, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 2, "col": 3 },
+      { "id": 12, "x": 264, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 2, "col": 4 },
+      { "id": 13, "x": 335, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 1, "col": 1 },
+      { "id": 14, "x": 406, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 1, "col": 2 },
+      { "id": 15, "x": 478, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 1, "col": 3 },
+      { "id": 16, "x": 549, "y": 568, "width": 34, "height": 34, "type": "pad", "row": 1, "col": 4, "special": true, "label": "TRACK" }
+    ],
+    "screen": {
+      "id": "lcd",
+      "x": 140,
+      "y": 40,
+      "width": 355,
+      "height": 80,
+      "type": "screen",
+      "lines": 2,
+      "font": "Courier New",
+      "bgColor": "#05080a",
+      "fgColor": "#4a90d2"
+    },
+    "knobs": [
+      { "id": "volume", "x": 480, "y": 180, "radius": 35, "type": "knob", "label": "VOL", "min": 0, "max": 100, "default": 100 },
+      { "id": "tempo",  "x": 550, "y": 180, "radius": 35, "type": "knob", "label": "TEMPO", "min": 40, "max": 240, "default": 120 },
+      { "id": "swing",  "x": 480, "y": 280, "radius": 25, "type": "knob", "label": "SWING", "min": -50, "max": 50, "default": 0 },
+      { "id": "filter", "x": 550, "y": 280, "radius": 25, "type": "knob", "label": "FILTER", "min": 0, "max": 127, "default": 64 }
+    ],
+    "encoders": [
+      { "id": "nav", "x": 180, "y": 180, "radius": 30, "type": "encoder", "label": "NAV", "detents": 24 },
+      { "id": "param1", "x": 260, "y": 180, "radius": 25, "type": "encoder", "label": "P1", "detents": 32 },
+      { "id": "param2", "x": 340, "y": 180, "radius": 25, "type": "encoder", "label": "P2", "detents": 32 },
+      { "id": "param3", "x": 420, "y": 180, "radius": 25, "type": "encoder", "label": "P3", "detents": 32 }
+    ],
+    "buttons": [
+      { "id": "up",      "x": 100, "y": 120, "width": 40, "height": 40, "type": "button", "label": "▲", "variant": "nav" },
+      { "id": "down",    "x": 100, "y": 180, "width": 40, "height": 40, "type": "button", "label": "▼", "variant": "nav" },
+      { "id": "left",    "x": 60,  "y": 150, "width": 40, "height": 40, "type": "button", "label": "◀", "variant": "nav" },
+      { "id": "right",   "x": 140, "y": 150, "width": 40, "height": 40, "type": "button", "label": "▶", "variant": "nav" },
+      { "id": "enter",   "x": 100, "y": 150, "width": 40, "height": 40, "type": "button", "label": "⏎", "variant": "primary" },
+      { "id": "back",    "x": 100, "y": 220, "width": 40, "height": 40, "type": "button", "label": "⌫", "variant": "secondary" },
+      { "id": "track",   "x": 100, "y": 280, "width": 40, "height": 40, "type": "button", "label": "TRK", "variant": "track" },
+      { "id": "shift",   "x": 40,  "y": 340, "width": 40, "height": 40, "type": "button", "label": "SHIFT", "variant": "modifier" },
+      { "id": "rec",     "x": 100, "y": 340, "width": 40, "height": 40, "type": "button", "label": "●", "variant": "record" },
+      { "id": "play",    "x": 160, "y": 340, "width": 40, "height": 40, "type": "button", "label": "▶", "variant": "play" },
+      { "id": "stop",    "x": 220, "y": 340, "width": 40, "height": 40, "type": "button", "label": "■", "variant": "stop" },
+      { "id": "mode",    "x": 280, "y": 340, "width": 40, "height": 40, "type": "button", "label": "MODE", "variant": "mode" },
+      { "id": "kit",     "x": 340, "y": 340, "width": 40, "height": 40, "type": "button", "label": "KIT", "variant": "kit" },
+      { "id": "sample",  "x": 400, "y": 340, "width": 40, "height": 40, "type": "button", "label": "SMPL", "variant": "sample" },
+      { "id": "fx",      "x": 460, "y": 340, "width": 40, "height": 40, "type": "button", "label": "FX", "variant": "fx" },
+      { "id": "mixer",   "x": 520, "y": 340, "width": 40, "height": 40, "type": "button", "label": "MIX", "variant": "mixer" }
+    ],
+    "leds": [
+      { "id": "pad1",  "x": 48,  "y": 605, "radius": 4, "type": "led", "pad": 1 },
+      { "id": "pad2",  "x": 120, "y": 605, "radius": 4, "type": "led", "pad": 2 },
+      { "id": "pad3",  "x": 192, "y": 605, "radius": 4, "type": "led", "pad": 3 },
+      { "id": "pad4",  "x": 264, "y": 605, "radius": 4, "type": "led", "pad": 4 },
+      { "id": "pad5",  "x": 335, "y": 534, "radius": 4, "type": "led", "pad": 5 },
+      { "id": "pad6",  "x": 406, "y": 534, "radius": 4, "type": "led", "pad": 6 },
+      { "id": "pad7",  "x": 478, "y": 534, "radius": 4, "type": "led", "pad": 7 },
+      { "id": "pad8",  "x": 549, "y": 534, "radius": 4, "type": "led", "pad": 8 },
+      { "id": "pad9",  "x": 48,  "y": 534, "radius": 4, "type": "led", "pad": 9 },
+      { "id": "pad10", "x": 120, "y": 534, "radius": 4, "type": "led", "pad": 10 },
+      { "id": "pad11", "x": 192, "y": 534, "radius": 4, "type": "led", "pad": 11 },
+      { "id": "pad12", "x": 264, "y": 534, "radius": 4, "type": "led", "pad": 12 },
+      { "id": "pad13", "x": 335, "y": 534, "radius": 4, "type": "led", "pad": 13 },
+      { "id": "pad14", "x": 406, "y": 534, "radius": 4, "type": "led", "pad": 14 },
+      { "id": "pad15", "x": 478, "y": 534, "radius": 4, "type": "led", "pad": 15 },
+      { "id": "pad16", "x": 549, "y": 534, "radius": 4, "type": "led", "pad": 16 }
+    ],
+    "chassis": {
+      "type": "path",
+      "color": "#1a1d21",
+      "stroke": "#3a3f45",
+      "strokeWidth": 2,
+      "cornerRadius": 16
+    }
+  }
+}
