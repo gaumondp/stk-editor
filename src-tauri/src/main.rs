@@ -5,13 +5,21 @@
 
 use smpltrek_kit_builder_lib as lib;
 use tauri::{Emitter, Manager, PhysicalSize, WindowEvent};
-use tauri::menu::{MenuBuilder, SubmenuBuilder};
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use smpltrek_kit_builder_lib::{
   AudioFile, CompileReport, DeviceProfileInfo, ExportOptions, ExportReport,
   FindMissingReport, Project, RecentStore, ValidationResult,
 };
 use smpltrek_kit_builder_lib::stk_inspect::{StkExtractReport, StkInspectReport};
 use smpltrek_kit_builder_lib::diagnostics::Diagnostics;
+
+fn frontend_menu_event(menu_id: &str) -> Option<&'static str> {
+   match menu_id {
+      "open_about" => Some("open-about"),
+      "quit" => Some("request-quit"),
+      _ => None,
+   }
+}
 
 fn main() {
    tauri::Builder::default()
@@ -26,6 +34,9 @@ fn main() {
                }
             });
          }
+         let quit = MenuItemBuilder::with_id("quit", "Quit STK Editor")
+            .accelerator("CmdOrCtrl+Q")
+            .build(app)?;
          let app_menu = SubmenuBuilder::new(app, "STK Editor")
             .text("open_about", "About STK Editor")
             .separator()
@@ -33,13 +44,13 @@ fn main() {
             .hide_others()
             .show_all()
             .separator()
-            .quit()
+            .item(&quit)
             .build()?;
          let menu = MenuBuilder::new(app).item(&app_menu).build()?;
          app.set_menu(menu)?;
          app.on_menu_event(|handle, event| {
-            if event.id() == "open_about" {
-               let _ = handle.emit("open-about", ());
+            if let Some(frontend_event) = frontend_menu_event(event.id().as_ref()) {
+               let _ = handle.emit(frontend_event, ());
             }
          });
          Ok(())
@@ -209,4 +220,14 @@ fn cmd_extract_stk(
 #[tauri::command]
 fn cmd_diagnostics() -> Diagnostics {
    lib::diagnostics::collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::frontend_menu_event;
+
+    #[test]
+    fn quit_menu_event_requests_a_guarded_frontend_quit() {
+        assert_eq!(frontend_menu_event("quit"), Some("request-quit"));
+    }
 }

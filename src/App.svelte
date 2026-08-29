@@ -124,6 +124,7 @@ import {
 		// Tauri close hook (S13) — intercept window close when dirty
 		let unlisten: (() => void) | null = null;
 		let unlistenAbout: (() => void) | null = null;
+		let unlistenQuit: (() => void) | null = null;
 		(async () => {
 			try {
 				const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -145,11 +146,15 @@ import {
 			}
 		})();
 
-		void import('@tauri-apps/api/event').then(({ listen }) => listen('open-about', () => { showAbout = true; }).then((stop) => (unlistenAbout = stop))).catch(() => {});
+		void import('@tauri-apps/api/event').then(({ listen }) => Promise.all([
+			listen('open-about', () => { showAbout = true; }).then((stop) => (unlistenAbout = stop)),
+			listen('request-quit', () => { void requestQuit(); }).then((stop) => (unlistenQuit = stop)),
+		])).catch(() => {});
 
 		return () => {
 			if (unlisten) unlisten();
 			if (unlistenAbout) unlistenAbout();
+			if (unlistenQuit) unlistenQuit();
 		};
 	});
 </script>
