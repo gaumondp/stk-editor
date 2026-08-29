@@ -433,7 +433,11 @@ export async function guardUnsaved(): Promise<boolean> {
   if (!dirtyCache) return true;
   const choice = await requestUnsavedDialog();
   if (choice === 'save') return (await saveKit()) !== null;
-  return choice === 'discard';
+  if (choice === 'discard') {
+    setSaved();
+    return true;
+  }
+  return false;
 }
 
 // ---- exported for recent menu ----

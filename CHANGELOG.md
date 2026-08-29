@@ -17,4 +17,4 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Core Kit commands now show platform-aware keyboard equivalents, including Cmd/Ctrl+Q to quit safely.
 - The top-bar Save button turns green while a kit has unsaved changes.
 - The complete interface and bundled help are now available in Japanese.
-- macOS `⌘Q` now uses the native menu event and preserves the unsaved-changes guard.
+- macOS `⌘Q` now uses the native menu event and preserves the unsaved-changes guard; choosing Discard then closes the app.
