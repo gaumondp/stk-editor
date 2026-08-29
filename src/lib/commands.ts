@@ -293,7 +293,8 @@ export const api = {
   export: (project: Project, opts: ExportOptions) =>
     invoke<ExportReport>('cmd_export', { project: toBackendProject(project), opts }),
   listWavs: (dir: string) => invoke<AudioFile[]>('cmd_list_wavs', { dir }),
-  audioMeta: (path: string) => invoke<AudioFile>('cmd_audio_meta', { path })
+  audioMeta: (path: string) => invoke<AudioFile>('cmd_audio_meta', { path }),
+  exitApp: () => invoke<void>('cmd_exit_app')
 };
 
 export const inspectStk = (path: string, locale: string) =>

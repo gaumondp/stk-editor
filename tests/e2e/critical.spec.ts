@@ -806,3 +806,29 @@ test('32. CSS zoom fallback keeps the app root within the viewport width', async
 	});
 	expect(metrics.rootWidth).toBeLessThanOrEqual(metrics.viewportWidth);
 });
+
+
+test('33. Quit menu exits the native application after the guard succeeds', async ({ page }) => {
+	await page.addInitScript(() => {
+		localStorage.setItem('locale', 'en');
+		Object.defineProperty(window, '__appExitRequested', { writable: true, value: false });
+		Object.defineProperty(window, '__TAURI_INTERNALS__', {
+			value: {
+				metadata: { currentWindow: { label: 'main' } },
+				transformCallback: () => 1,
+				unregisterCallback: () => {},
+				invoke: async (command: string) => {
+					if (command === 'cmd_exit_app') {
+						(window as typeof window & { __appExitRequested?: boolean }).__appExitRequested = true;
+					}
+					if (command === 'cmd_load_recent') return { entries: [] };
+					return undefined;
+				}
+			}
+		});
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: 'Kit', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Quit STK Editor', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => (window as typeof window & { __appExitRequested?: boolean }).__appExitRequested)).toBe(true);
+});

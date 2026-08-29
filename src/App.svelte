@@ -101,9 +101,9 @@ import {
 	}
 
 	async function requestQuit() {
+		if (!(await guardUnsaved())) return;
 		try {
-			const { getCurrentWindow } = await import('@tauri-apps/api/window');
-			await getCurrentWindow().close();
+			await api.exitApp();
 		} catch {
 			window.close();
 		}

@@ -84,7 +84,9 @@ fn main() {
         cmd_inspect_stk,
         cmd_extract_stk,
         // diagnostics
-        cmd_diagnostics
+        cmd_diagnostics,
+        // application lifecycle
+        cmd_exit_app
       ])
       .run(tauri::generate_context!())
       .expect("error while running STK Editor");
@@ -220,6 +222,11 @@ fn cmd_extract_stk(
 #[tauri::command]
 fn cmd_diagnostics() -> Diagnostics {
    lib::diagnostics::collect()
+}
+
+#[tauri::command]
+fn cmd_exit_app(app: tauri::AppHandle) {
+   app.exit(0);
 }
 
 #[cfg(test)]
