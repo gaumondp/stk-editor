@@ -98,8 +98,16 @@ test.describe('Critical paths (S17)', () => {
 		await select.selectOption('fr');
 		await expect(page.getByRole('button', { name: 'Nouveau kit' })).toBeVisible();
 		const frenchSelect = page.locator('select[aria-label="Langue"]').first();
-		await frenchSelect.selectOption('en');
-		await expect(page.getByRole('button', { name: 'New kit' })).toBeVisible();
+		await frenchSelect.selectOption('ja');
+		await expect(page.getByRole('button', { name: '新規キット' })).toBeVisible();
+		await expect(page.locator('select option[value="en"]')).toHaveText('English');
+		await expect(page.locator('select option[value="fr"]')).toHaveText('Français');
+		await expect(page.locator('select option[value="ja"]')).toHaveText('Japanese');
+	});
+
+	test('6.1. Save button highlights unsaved changes', async ({ page }) => {
+		await startNewKit(page);
+		await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveClass(/save-ready/);
 	});
 });
 

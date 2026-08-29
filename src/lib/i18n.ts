@@ -28,6 +28,7 @@ const en: Record<string, string> = {
               'menu.kit_information': 'Kit information…',
                'menu.find_missing': 'Find missing audio files…',
                 'menu.close': 'Close kit',
+                 'menu.quit': 'Quit STK Editor',
                  'menu.compile': 'Compile kit',
                   'menu.compile_file': 'Compile to .stk…',
                    'menu.export': 'Export',
@@ -167,6 +168,7 @@ const fr: Record<string, string> = {
               'menu.kit_information': 'Informations du kit…',
                'menu.find_missing': 'Rechercher les fichiers audio manquants…',
                 'menu.close': 'Fermer le kit',
+                 'menu.quit': 'Quitter STK Editor',
                  'menu.compile': 'Compiler le kit',
                   'menu.compile_file': 'Compiler en .stk…',
                    'menu.export': 'Exporter',
@@ -359,25 +361,45 @@ Object.assign(fr, {
 	'display.scale': 'Échelle de l’interface',
 });
 
-const dict: Record<'fr' | 'en', Record<string, string>> = { fr, en };
-const available = ['fr', 'en'] as const;
+const ja: Record<string, string> = {
+	'app.title': 'STK Editor', 'welcome.description': '編集可能なキットを作成し、Sonicware機器向けの .stk ファイルをコンパイルします。', 'welcome.supported': 'Sonicware SmplTrek ファームウェア 3.2 でのみ動作確認済みです。', 'welcome.elz1': 'Sonicware は ELZ_1 Play 用の STK データを公開していますが、STK Editor では未検証です。', 'welcome.hint': 'WAVをパッドへドラッグして割り当て • Cmd/Ctrl+クリックでサンプルを解除 • ダブルクリックで試聴 • F1でヘルプを表示',
+	'menu.new': '新規キット', 'menu.kit': 'キット', 'menu.open': 'キットを開く…', 'menu.open_compiled': 'コンパイル済みキットを開く…', 'menu.save': '保存', 'menu.save_as': '名前を付けて保存…', 'menu.kit_information': 'キット情報…', 'menu.find_missing': '見つからないオーディオファイルを検索…', 'menu.close': 'キットを閉じる', 'menu.quit': 'アプリケーションを終了', 'menu.compile': 'キットをコンパイル', 'menu.compile_file': '.stk にコンパイル…', 'menu.export': '書き出し', 'menu.export_sd': 'SDカードへ書き出し…', 'menu.export_full': 'JSON付きでキットを書き出し…', 'menu.undo': '元に戻す', 'menu.redo': 'やり直す', 'menu.about': 'STK Editor について', 'menu.recent': '最近のキット…', 'menu.help': 'ヘルプ', 'menu.language': '言語', 'menu.no_recent': '最近使用したキットはありません',
+	'status.saved': '保存済み', 'status.modified': '変更あり', 'status.saving': '保存中…', 'status.compiling': 'コンパイル中…', 'status.compile_ok': 'コンパイルに成功しました', 'status.compile_error': 'コンパイルに失敗しました', 'status.missing': 'オーディオファイルが見つかりません', 'status.invalid': '無効なプロジェクト', 'status.git_conflict': 'Git競合', 'status.git_sync': 'Git同期中…', 'status.git_sync_ok': 'Git同期完了', 'status.git_error': 'Gitエラー',
+	'pad.empty': '空', 'pad.assigned': '割り当て済み', 'pad.selected': '選択中', 'pad.drag_over': 'ここにWAVをドロップ', 'pad.missing': '見つからない', 'pad.invalid': '無効', 'pad.disabled': '予約済み', 'pad.count_one': '{count} パッド', 'pad.count_other': '{count} パッド',
+	'kit.name': 'キット名', 'kit.pads': 'パッド', 'kit.notes': 'メモ',
+	'explorer.title': 'オーディオファイル', 'explorer.select_dir': 'フォルダーを選択…', 'explorer.name': 'ファイル', 'explorer.size': 'サイズ', 'explorer.duration': '長さ', 'explorer.date': '日付', 'explorer.columns': '列', 'explorer.show_size': 'サイズを表示', 'explorer.show_duration': '長さを表示', 'explorer.show_date': '日付を表示', 'explorer.resize': 'オーディオエクスプローラーのサイズ変更', 'explorer.compatible': '互換性あり', 'explorer.search': '検索', 'explorer.play': '試聴', 'explorer.stop': '試聴を停止', 'explorer.volume': '音量', 'explorer.preview_volume': '試聴音量', 'explorer.no_preview': '試聴するWAVが選択されていません', 'explorer.preview_error': 'このWAVを再生できません', 'explorer.missing_global': '見つからないファイルを検索', 'explorer.sort': '並べ替え', 'explorer.sort_name': '名前順',
+	'missing.title': '見つからないファイル', 'missing.relink': '再リンク', 'btn.compile': 'キットをコンパイル', 'btn.save': '保存', 'btn.save_as': '名前を付けて保存', 'btn.export_sd': 'SDカードへ書き出し（ハードウェア用）', 'btn.export_full': '完全書き出し（JSON付き）', 'btn.open_dir': '出力フォルダーを開く',
+	'compile.title': '.STK にコンパイル', 'compile.output': '出力 .STK ファイル', 'compile.mono': 'モノラル', 'compile.stereo': 'ステレオ', 'compile.overwrite': '既存の場合は上書き', 'compile.copy_samples': '書き出し時にサンプルをコピー', 'compile.blocking': '処理を妨げるエラー', 'compile.warnings': '警告', 'compile.overwrite_invalid': '既存の無効な .stk ファイルを上書きしますか？',
+	'unsaved.title': '未保存の変更', 'unsaved.body': '保存されていない変更があります。どうしますか？', 'unsaved.save': '保存', 'unsaved.discard': '保存せずに破棄', 'unsaved.cancel': 'キャンセル',
+	'help.shortcuts': 'キーボードショートカット', 'help.guide': 'ユーザーガイド', 'help.json': 'JSON形式', 'help.compile_doc': 'コンパイル', 'help.sd_doc': 'SDカードへの書き出し', 'help.compatibility': '互換性', 'help.diagnostic': '診断レポート', 'help.guide_body': 'WAVをパッドにドラッグして割り当てます。Cmd/Ctrl+クリックでディスク上のファイルを残したまま解除できます。エクスプローラーでファイルを参照・試聴できます。', 'help.json_body': 'プロジェクトは smpltrek-kit-project JSON 形式を使用します。各パッドのファイル参照とサウンド設定を保持するため、後から編集できます。', 'help.compile_doc_body': 'コンパイルにより SmplTrek ファームウェア 3.2 向けの .stk ファイルが作成されます。必要なファイルが見つからない場合、コンパイルはできません。', 'help.sd_doc_body': 'ハードウェア用の書き出しには機器で使うファイルだけが含まれます。完全書き出しには、後から編集できるようSTK、WAV、JSON、READMEも含まれます。', 'help.compatibility_body': 'このビルドは Sonicware SmplTrek ファームウェア 3.2 でのみ動作確認済みです。他の機器やファームウェアは未検証です。', 'help.diagnostic_body': 'このメニューからショートカット、バージョン情報、同梱のREADMEを開けます。', 'help.about': 'バージョン情報',
+	'common.close': '閉じる', 'common.cancel': 'キャンセル', 'common.save_changes': '変更を保存', 'common.open_recent': '最近使用した項目を開く', 'common.clear_recent': '最近使用した項目を消去', 'dialog.kit_information': 'キット情報',
+	'inspect.title': 'コンパイル済みキットを開く', 'inspect.choose': '.STKを選択…', 'inspect.inspect': '検査', 'inspect.inspecting': '検査中…', 'inspect.extract': '編集可能なキットとして展開…', 'inspect.extracting': '展開中…', 'inspect.path_placeholder': '/path/to/kit.stk', 'inspect.path_label': '.STKファイルのパス', 'inspect.valid': '✓ 有効', 'inspect.invalid': '✗ 無効', 'inspect.summary': '{bytes} バイト • {filled}/{total} パッド使用中 • ヘッダー {header} • KTDT {ktdt}', 'inspect.errors': 'エラー（{count}）', 'inspect.warnings': '警告（{count}）', 'inspect.info': '情報', 'inspect.pads': 'パッド', 'inspect.col_pad': 'パッド', 'inspect.col_path': 'パス', 'inspect.col_vol': '音量', 'inspect.col_pan': 'パン', 'inspect.col_pitch': 'ピッチ', 'inspect.col_fx': 'FX', 'inspect.col_valid': '有効', 'inspect.extract_ok': 'キットを {path} に展開しました', 'inspect.extract_error': '展開に失敗しました：{error}',
+	'about.build_time': 'ビルド日時 {time}', 'about.developed_by': '開発：Patrick Gaumond', 'about.github': 'GitHubリポジトリ', 'about.copy_diagnostics': '診断情報をコピー', 'about.diagnostics_copied': 'コピーしました', 'about.title': 'STK Editor', 'about.version': 'v{version} • Sonicware SmplTrek ファームウェア 3.2 でのみ動作確認済み', 'about.description': '編集可能なキットを作成し、.stkファイルをコンパイルして、コンパイル済みキットをローカルで検査します。', 'about.compatibility': 'Sonicware は SmplTrek で作成した STK データを ELZ_1 Play で使えると案内していますが、STK Editor では未検証です。', 'about.license': 'ライセンス：MIT', 'about.repo': 'ローカル専用アプリケーション', 'about.disclaimer': '独立したプロジェクトです。使用する正確なハードウェアとファームウェアで、必ず各出力を確認してください。', 'about.ok': 'OK',
+	'device.smpltrek_3_2': 'Sonicware SmplTrek · ファームウェア 3.2', 'git.title': 'Git', 'git.status': 'リポジトリの状態', 'git.remotes': 'リモート', 'git.commit': 'コミット', 'git.pull': 'プル', 'git.push': 'プッシュ', 'git.branch': 'ブランチ', 'git.init': '初期化', 'git.no_repo': 'Gitリポジトリではありません', 'export.hardware': 'ハードウェアプロファイル（機器用ファイルのみ）', 'export.full': '完全プロファイル（JSON・README付き）', 'export.overwrite_invalid': '既存の無効な .stk ファイルを上書きしますか？',
+	'pad.assignments_title': 'オーディオパッドの割り当て', 'pad.assignments_description': 'オーディオファイルをこのリストまたはパッドへ直接ドラッグします。', 'pad.assigned_count': '{count}/15 割り当て済み', 'pad.ready': 'WAVを待機中', 'pad.drop_here': 'ここにWAVをドロップ', 'pad.remove': 'パッド {pad} からサンプルを削除', 'pad.clear_all': 'すべて消去', 'pad.mute_preview': '試聴をミュート', 'pad.unmute_preview': '試聴のミュートを解除', 'pad.preview_hint': 'パッドをダブルクリックすると割り当てたサウンドを試聴できます。', 'pad.suggestions_title': '標準ドラム配置', 'pad.hide_suggestions': '推奨ドラム配置を隠す', 'pad.show_suggestions': '推奨ドラム配置を表示',
+	'pad.suggestion_1': 'メインクラッシュ', 'pad.suggestion_1_short': 'Crash 1', 'pad.suggestion_2': 'メインオープンハイハット', 'pad.suggestion_2_short': 'Open HH', 'pad.suggestion_3': 'メインライド', 'pad.suggestion_3_short': 'Ride 1', 'pad.suggestion_4': '高音域パーカッション', 'pad.suggestion_4_short': 'High Perc', 'pad.suggestion_5': '中音域パーカッション', 'pad.suggestion_5_short': 'Mid Perc', 'pad.suggestion_6': '低音域パーカッション', 'pad.suggestion_6_short': 'Low Perc', 'pad.suggestion_7': '効果音または特殊パーカッション', 'pad.suggestion_7_short': 'FX/Perc', 'pad.suggestion_8': 'メインキック', 'pad.suggestion_8_short': 'Kick 1', 'pad.suggestion_9': 'メインスネア', 'pad.suggestion_9_short': 'Snare 1', 'pad.suggestion_10': 'メインクローズドハイハット', 'pad.suggestion_10_short': 'Closed HH', 'pad.suggestion_11': 'メインクラップ', 'pad.suggestion_11_short': 'Clap 1', 'pad.suggestion_12': 'メインリムショット', 'pad.suggestion_12_short': 'Rimshot', 'pad.suggestion_13': 'セカンダリーキック', 'pad.suggestion_13_short': 'Kick 2', 'pad.suggestion_14': 'セカンダリースネア', 'pad.suggestion_14_short': 'Snare 2', 'pad.suggestion_15': 'メインシェイカー', 'pad.suggestion_15_short': 'Shaker',
+	'theme.switch_to_light': 'ライトテーマを使用', 'theme.switch_to_dark': 'ダークテーマを使用', 'display.scale': 'インターフェースの拡大率',
+};
+
+const dict: Record<'fr' | 'en' | 'ja', Record<string, string>> = { fr, en, ja };
+const available = ['fr', 'en', 'ja'] as const;
 const FALLBACK = 'en' as const;
 
 // Detect language from the system on first launch.
-function systemLocale(): 'fr' | 'en' {
-     if (typeof navigator !== 'undefined' && navigator.language) {
-       if (navigator.language.toLowerCase().startsWith('fr'))
-        return 'fr';
-          return 'en';
-          }
-      return 'en';
+function systemLocale(): 'fr' | 'en' | 'ja' {
+	if (typeof navigator !== 'undefined' && navigator.language) {
+		const language = navigator.language.toLowerCase();
+		if (language.startsWith('fr')) return 'fr';
+		if (language.startsWith('ja')) return 'ja';
+	}
+	return 'en';
 }
 
-const localeStore = writable<'fr' | 'en'>(
-     (typeof localStorage !== 'undefined'
-        ? (localStorage.getItem('locale') as 'fr' | 'en' | null)
-          : null) ?? systemLocale()
-       );
+const localeStore = writable<'fr' | 'en' | 'ja'>(
+	(typeof localStorage !== 'undefined'
+		? (localStorage.getItem('locale') as 'fr' | 'en' | 'ja' | null)
+		: null) ?? systemLocale()
+);
 
 // Persist locale and bump the reactive tick on every change.
 localeStore.subscribe((l) => {
@@ -433,10 +455,10 @@ export function trAsync(
 }
 
 export const locale = localeStore;
-export function setLocale(l: 'fr' | 'en') {
+export function setLocale(l: 'fr' | 'en' | 'ja') {
      localeStore.set(l);
       }
-export function getLocale(): 'fr' | 'en' {
+export function getLocale(): 'fr' | 'en' | 'ja' {
      return get(localeStore);
       }
 export { available };

@@ -16,6 +16,7 @@
 		undoStack,
 		redoStack,
 		closeKit,
+		dirty,
 		newKit,
 		stkInspectOpen,
 		findMissingGlobal,
@@ -30,10 +31,11 @@
 	import type { CompileReport } from '../lib/commands';
 	import HelpMenu from './HelpMenu.svelte';
 
-	let { onKitInformation = () => {}, onAbout = () => {}, onShortcuts = () => {} }: {
+	let { onKitInformation = () => {}, onAbout = () => {}, onShortcuts = () => {}, onQuit = () => {} }: {
 		onKitInformation?: () => void;
 		onAbout?: () => void;
 		onShortcuts?: () => void;
+		onQuit?: () => void;
 	} = $props();
 	let openMenu = $state<'kit' | 'export' | null>(null);
 	let recentOpen = $state(false);
@@ -221,6 +223,15 @@
 		recentOpen = false;
 	}
 
+	function platformShortcut(key: string) {
+		const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+		return isMac ? `⌘${key.replace('Shift+', '⇧')}` : `Ctrl+${key}`;
+	}
+
+	function languageName(language: (typeof available)[number]) {
+		return language === 'fr' ? 'Français' : language === 'ja' ? 'Japanese' : 'English';
+	}
+
 	function closeMenu() {
 		openMenu = null;
 		recentOpen = false;
@@ -236,8 +247,8 @@
 		<button class="btn menu-trigger" type="button" aria-haspopup="menu" aria-expanded={openMenu === 'kit'} onclick={() => toggleMenu('kit')}>{tr('menu.kit')} <span class="menu-chevron" aria-hidden="true"></span></button>
 		{#if openMenu === 'kit'}
 			<div class="menu" role="menu" aria-label={tr('menu.kit')}>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doNew(); }}>{tr('menu.new')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doOpen(); }}>{tr('menu.open')}</button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doNew(); }}><span>{tr('menu.new')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('N')}</span></button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doOpen(); }}><span>{tr('menu.open')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('O')}</span></button>
 				<button role="menuitem" type="button" onclick={() => { closeMenu(); stkInspectOpen.set(true); }}>{tr('menu.open_compiled')}</button>
 				<button role="menuitem" type="button" aria-haspopup="true" aria-expanded={recentOpen} onclick={() => (recentOpen = !recentOpen)}>
 					{tr('menu.recent')} <span class="recent-chevron" aria-hidden="true">›</span>
@@ -252,12 +263,16 @@
 					</div>
 				{/if}
 				<hr />
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doSave(); }}>{tr('menu.save')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void saveAs(); }}>{tr('menu.save_as')}</button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doSave(); }}><span>{tr('menu.save')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('S')}</span></button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void saveAs(); }}><span>{tr('menu.save_as')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Shift+S')}</span></button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void undo(); }}><span>{tr('menu.undo')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Z')}</span></button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void redo(); }}><span>{tr('menu.redo')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Shift+Z')}</span></button>
 				<hr />
 				<button role="menuitem" type="button" onclick={() => { closeMenu(); onKitInformation(); }}>{tr('menu.kit_information')}</button>
 				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doFindMissing(); }}>{tr('menu.find_missing')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void closeKit(); }}>{tr('menu.close')}</button>
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); void closeKit(); }}><span>{tr('menu.close')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('W')}</span></button>
+				<hr />
+				<button role="menuitem" type="button" onclick={() => { closeMenu(); onQuit(); }}><span>{tr('menu.quit')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Q')}</span></button>
 			</div>
 		{/if}
 	</div>
@@ -274,6 +289,7 @@
 	<div class="spacer"></div>
 	<div class="project-name" title={$projectPath ?? ''}>{$project.kit.name || '—'}</div>
 	<span class={`status-pill ${statusClass($status.kind)}`} title={statusLabel()}>{statusLabel()}</span>
+	<button class:save-ready={$dirty} class="btn save-button" type="button" onclick={() => void doSave()}>{tr('menu.save')}</button>
 	<button class="btn icon" type="button" onclick={() => void undo()} disabled={$undoStack.length === 0} aria-label={tr('menu.undo')} title={tr('menu.undo')}>↩</button>
 	<button class="btn icon" type="button" onclick={() => void redo()} disabled={$redoStack.length === 0} aria-label={tr('menu.redo')} title={tr('menu.redo')}>↪</button>
 	<select class="select" data-testid="ui-scale" aria-label={tr('display.scale')} value={uiScale} onchange={(event) => setUiScale(Number((event.target as HTMLSelectElement).value) as UiScale)}>
@@ -282,8 +298,8 @@
 	<button class="btn icon theme-toggle" data-testid="theme-toggle" type="button" onclick={toggleTheme} aria-label={tr(theme === 'dark' ? 'theme.switch_to_light' : 'theme.switch_to_dark')} title={tr(theme === 'dark' ? 'theme.switch_to_light' : 'theme.switch_to_dark')}>
 		<span aria-hidden="true">{theme === 'dark' ? '☀︎' : '☾'}</span>
 	</button>
-	<select class="select" aria-label={tr('menu.language')} value={$locale} onchange={(e) => setLocale((e.target as HTMLSelectElement).value as 'fr' | 'en')}>
-		{#each available as l}<option value={l}>{l.toUpperCase()}</option>{/each}
+	<select class="select" aria-label={tr('menu.language')} value={$locale} onchange={(e) => setLocale((e.target as HTMLSelectElement).value as (typeof available)[number])}>
+		{#each available as l}<option value={l}>{languageName(l)}</option>{/each}
 	</select>
 	<HelpMenu icon onShortcuts={onShortcuts} onAbout={onAbout} />
 </header>
@@ -303,13 +319,15 @@
 	.btn, .select { background:var(--bg-3,#2e3338); color:var(--fg,#e6e6e6); border:1px solid var(--line,#3a3f45); border-radius:4px; cursor:pointer; }
 	.btn { padding:4px 10px; line-height:1.1; }
 	.btn:hover, .btn[aria-expanded="true"] { background:var(--bg-4,#39414b); }
+	.save-ready { background:rgba(76,175,80,.2); border-color:var(--ok,#4caf50); color:var(--ok,#4caf50); font-weight:700; }
 	.btn:disabled { opacity:.5; cursor:not-allowed; }
 	.icon { min-width:31px; font-weight:700; }
 	.menu-chevron { display:inline-block; width:0; height:0; margin-left:7px; border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid currentColor; vertical-align:middle; transform:translateY(1px); }
 	.select { padding:4px 8px; }
 	.menu-wrap { position:relative; }
 	.menu { position:absolute; top:calc(100% + 5px); left:0; z-index:250; min-width:220px; padding:4px; background:#3a4047; border:1px solid #59616a; border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
-	.menu button { display:block; width:100%; padding:7px 9px; border:0; border-radius:4px; background:transparent; color:var(--fg,#e6e6e6); text-align:left; cursor:pointer; font:inherit; font-size:13px; }
+	.menu button { display:flex; justify-content:space-between; gap:16px; width:100%; padding:7px 9px; border:0; border-radius:4px; background:transparent; color:var(--fg,#e6e6e6); text-align:left; cursor:pointer; font:inherit; font-size:13px; }
+	.shortcut { color:var(--fg-dim,#9aa0a6); font-size:12px; white-space:nowrap; }
 	.menu button:hover, .menu button:focus-visible { background:var(--bg-3,#2e3338); outline:none; }
 	.menu hr { height:1px; margin:4px 2px; border:0; background:var(--line,#3a3f45); }
 	.recent-chevron { float:right; font-size:16px; line-height:12px; }

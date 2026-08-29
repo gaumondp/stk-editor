@@ -15,6 +15,7 @@ STK Editor creates editable JSON companions, compiles `.stk` kits, inspects comp
 - Create kits with up to 15 WAV assignments for the SmplTrek profile.
 - Preview WAVs from the Audio Explorer or an assigned pad with one shared volume control and a persistent mute toggle.
 - Switch between persistent light and dark application themes.
+- Use the complete interface and bundled help in English, French, or Japanese.
 - Save a portable, editable JSON companion file; original WAV files are never altered.
 - Compile a SmplTrek-targeted `.stk` file.
 - Open a compiled `.stk` file read-only, inspect its structure, and extract an editable kit package with provenance.

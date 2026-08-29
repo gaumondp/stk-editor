@@ -26,6 +26,13 @@ describe('i18n', () => {
 		expect(getLocale()).toBe('en');
 	});
 
+	it('provides a complete Japanese interface locale', () => {
+		setLocale('ja');
+		expect(getLocale()).toBe('ja');
+		expect(tr('menu.save')).toBe('保存');
+		expect(tr('help.guide')).toBe('ユーザーガイド');
+	});
+
 	it('interpolates vars', () => {
 		// No interpolation needed for current keys, but verify no throw
 		expect(t('app.title', { version: '1.0' })).toContain('STK Editor');

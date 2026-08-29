@@ -14,3 +14,6 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Windows builds now produce a portable `.exe` without an installer.
 - Incompatible WAV filenames are struck through in the Audio Explorer while remaining previewable and assignable.
+- Core Kit commands now show platform-aware keyboard equivalents, including Cmd/Ctrl+Q to quit safely.
+- The top-bar Save button turns green while a kit has unsaved changes.
+- The complete interface and bundled help are now available in Japanese.

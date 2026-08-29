@@ -45,6 +45,11 @@ import {
 
 	function onKey(e: KeyboardEvent) {
 		const mod = e.metaKey || e.ctrlKey;
+		if (mod && e.code === 'KeyQ') {
+			void requestQuit();
+			e.preventDefault();
+			return;
+		}
 		if (mod && e.code === 'KeyN') {
 			void guardUnsaved().then((ok) => ok && newKit());
 			e.preventDefault();
@@ -93,6 +98,15 @@ import {
 		});
 		if (!out) return;
 		if (await guardUnsaved()) await openKit(out as string);
+	}
+
+	async function requestQuit() {
+		try {
+			const { getCurrentWindow } = await import('@tauri-apps/api/window');
+			await getCurrentWindow().close();
+		} catch {
+			window.close();
+		}
 	}
 
 	function beforeUnload(e: BeforeUnloadEvent) {
@@ -146,6 +160,7 @@ import {
 			onKitInformation={() => (showKitInformation = true)}
 			onAbout={() => (showAbout = true)}
 			onShortcuts={() => (showShortcuts = true)}
+			onQuit={() => void requestQuit()}
 		/>
 	<main class="workspace">
 		{#if isWelcome}
