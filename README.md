@@ -98,6 +98,10 @@ pnpm tauri:dev
 
 # macOS app bundle
 PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build --bundles app
+
+# Windows portable executable (run this command on Windows)
+pnpm tauri build --no-bundle
+# Output: src-tauri/target/release/smpltrek-kit-builder.exe
 ```
 
 ## Attribution

@@ -435,6 +435,7 @@
 	.file-row:focus-visible { background: var(--bg-3, #2e3338); }
 	.file-row.playing { background: rgba(74,144,210,0.15); outline: 1px solid var(--accent-2, #4a90d2); }
 	.file-row.missing { background: rgba(231, 76, 60, 0.08); }
+	.file-row.missing .name { text-decoration: line-through; text-decoration-thickness: 2px; }
 	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.meta { color: var(--fg-dim, #9aa0a6); font-size: 10px; white-space: nowrap; }
 	.dot { width: 10px; height: 10px; border-radius: 50%; border: none; flex-shrink: 0; }

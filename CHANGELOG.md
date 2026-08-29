@@ -9,3 +9,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Initial public-release preparation.
+
+### Changed
+
+- Windows builds now produce a portable `.exe` without an installer.
+- Incompatible WAV filenames are struck through in the Audio Explorer while remaining previewable and assignable.
