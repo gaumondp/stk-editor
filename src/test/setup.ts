@@ -10,7 +10,9 @@ Object.defineProperty(globalThis, 'localStorage', {
 		key: (index: number) => [...localStorageData.keys()][index] ?? null,
 		removeItem: (key: string) => localStorageData.delete(key),
 		setItem: (key: string, value: string) => localStorageData.set(key, String(value)),
-		get length() { return localStorageData.size; }
+		get length() {
+			return localStorageData.size;
+		}
 	}
 });
 

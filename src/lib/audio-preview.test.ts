@@ -9,8 +9,12 @@ class FakeAudio {
 	volume = 1;
 	muted = false;
 	paused = true;
-	play = vi.fn(async () => { this.paused = false; });
-	pause = vi.fn(() => { this.paused = true; });
+	play = vi.fn(async () => {
+		this.paused = false;
+	});
+	pause = vi.fn(() => {
+		this.paused = true;
+	});
 	addEventListener = vi.fn();
 }
 
@@ -21,20 +25,24 @@ describe('shared WAV preview', () => {
 		vi.resetModules();
 		readFile.mockClear();
 		audio = new FakeAudio();
-		vi.stubGlobal('Audio', vi.fn(() => audio));
+		vi.stubGlobal(
+			'Audio',
+			vi.fn(() => audio)
+		);
 		vi.stubGlobal('URL', {
 			createObjectURL: vi.fn(() => 'blob:preview'),
-			revokeObjectURL: vi.fn(),
+			revokeObjectURL: vi.fn()
 		});
 		const values = new Map<string, string>();
 		vi.stubGlobal('localStorage', {
 			getItem: (key: string) => values.get(key) ?? null,
-			setItem: (key: string, value: string) => values.set(key, value),
+			setItem: (key: string, value: string) => values.set(key, value)
 		});
 	});
 
 	it('stops the current WAV before previewing another and applies the shared volume', async () => {
-		const { previewingPath, previewMuted, previewVolume, previewWav, setPreviewMuted, setPreviewVolume } = await import('./audio-preview');
+		const { previewingPath, previewMuted, previewVolume, previewWav, setPreviewMuted, setPreviewVolume } =
+			await import('./audio-preview');
 
 		setPreviewVolume(0.35);
 		setPreviewMuted(true);

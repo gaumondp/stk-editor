@@ -1,4 +1,13 @@
 // Focus trap action for modal dialogs (S05)
+/**
+ * Svelte action that traps keyboard focus within a modal element: it focuses the
+ * first focusable child on mount, cycles Tab/Shift+Tab between the first and last
+ * focusable descendants, and restores focus to the previously active element on
+ * destroy.
+ *
+ * @param node The modal container element the action is applied to.
+ * @returns A Svelte action object whose `destroy` handler detaches the listener and restores focus.
+ */
 export function focusTrap(node: HTMLElement) {
 	const selector = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 

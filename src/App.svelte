@@ -2,7 +2,7 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
-import { get } from 'svelte/store';
+	import { get } from 'svelte/store';
 	import TopBar from './components/TopBar.svelte';
 	import DeviceView from './components/DeviceView.svelte';
 	import AudioExplorer from './components/AudioExplorer.svelte';
@@ -15,7 +15,7 @@ import { get } from 'svelte/store';
 	import SdCardReaderDialog from './components/SdCardReaderDialog.svelte';
 	import ToastHost from './components/ToastHost.svelte';
 	import Welcome from './components/Welcome.svelte';
-import {
+	import {
 		newKit,
 		openKit,
 		saveKit,
@@ -42,10 +42,7 @@ import {
 	let showSdCardReader = $state(false);
 	let sdCardReport = $state<SdCardReport | null>(null);
 	let isWelcome = $derived(
-		$project.kit.name === 'NewKit' &&
-			Object.keys($project.kit.pads).length === 0 &&
-			!$project.kit.notes &&
-			!isDirty()
+		$project.kit.name === 'NewKit' && Object.keys($project.kit.pads).length === 0 && !$project.kit.notes && !isDirty()
 	);
 
 	function onKey(e: KeyboardEvent) {
@@ -90,16 +87,15 @@ import {
 			e.preventDefault();
 			return;
 		}
-		if (e.code === 'Escape') {
-			showShortcuts = false;
-			return;
-		}
+		// Escape is handled per-dialog by the `dismissable` action (src/lib/dismissable.ts),
+		// which fires only while that focus-trapped modal is open and stops propagation.
+		// No global Escape branch is needed here.
 	}
 
 	async function openViaDialog() {
 		const out = await open({
 			multiple: false,
-			filters: [{ name: 'SmplTrek Kit', extensions: ['json'] }],
+			filters: [{ name: 'SmplTrek Kit', extensions: ['json'] }]
 		});
 		if (!out) return;
 		if (await guardUnsaved()) await openKit(out as string);
@@ -169,10 +165,18 @@ import {
 			}
 		})();
 
-		void import('@tauri-apps/api/event').then(({ listen }) => Promise.all([
-			listen('open-about', () => { showAbout = true; }).then((stop) => (unlistenAbout = stop)),
-			listen('request-quit', () => { void requestQuit(); }).then((stop) => (unlistenQuit = stop)),
-		])).catch(() => {});
+		void import('@tauri-apps/api/event')
+			.then(({ listen }) =>
+				Promise.all([
+					listen('open-about', () => {
+						showAbout = true;
+					}).then((stop) => (unlistenAbout = stop)),
+					listen('request-quit', () => {
+						void requestQuit();
+					}).then((stop) => (unlistenQuit = stop))
+				])
+			)
+			.catch(() => {});
 
 		return () => {
 			if (unlisten) unlisten();
@@ -190,28 +194,31 @@ import {
 			onShortcuts={() => (showShortcuts = true)}
 			onQuit={() => void requestQuit()}
 		/>
-	<main class="workspace">
-		{#if isWelcome}
-			<Welcome />
-		{:else}
-			<section class="stage">
-				<DeviceView onReadSdCard={() => void readSdCard()} />
-				<AudioExplorer />
-			</section>
-		{/if}
-	</main>
-	<ShortcutsDialog open={showShortcuts} onClose={() => (showShortcuts = false)} />
-	<AboutDialog open={showAbout} onClose={() => (showAbout = false)} />
-	<KitInformationDialog open={showKitInformation} onClose={() => (showKitInformation = false)} />
-	<MissingFilesDialog open={$missingDialogOpen} onClose={() => missingDialogOpen.set(false)} />
-	<StkInspectDialog open={$stkInspectOpen} onClose={() => stkInspectOpen.set(false)} />
-	<SdCardReaderDialog
-		open={showSdCardReader}
-		report={sdCardReport}
-		onClose={() => (showSdCardReader = false)}
-		onChooseAnother={() => { showSdCardReader = false; void readSdCard(); }}
-	/>
-	<UnsavedDialog open={$unsavedOpen} onConfirm={unsavedResolve} />
+		<main class="workspace">
+			{#if isWelcome}
+				<Welcome />
+			{:else}
+				<section class="stage">
+					<DeviceView onReadSdCard={() => void readSdCard()} />
+					<AudioExplorer />
+				</section>
+			{/if}
+		</main>
+		<ShortcutsDialog open={showShortcuts} onClose={() => (showShortcuts = false)} />
+		<AboutDialog open={showAbout} onClose={() => (showAbout = false)} />
+		<KitInformationDialog open={showKitInformation} onClose={() => (showKitInformation = false)} />
+		<MissingFilesDialog open={$missingDialogOpen} onClose={() => missingDialogOpen.set(false)} />
+		<StkInspectDialog open={$stkInspectOpen} onClose={() => stkInspectOpen.set(false)} />
+		<SdCardReaderDialog
+			open={showSdCardReader}
+			report={sdCardReport}
+			onClose={() => (showSdCardReader = false)}
+			onChooseAnother={() => {
+				showSdCardReader = false;
+				void readSdCard();
+			}}
+		/>
+		<UnsavedDialog open={$unsavedOpen} onConfirm={unsavedResolve} />
 		<ToastHost />
 	{/key}
 </div>
@@ -225,7 +232,9 @@ import {
 		color: var(--fg, #e6e6e6);
 		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 	}
-	:global(html[data-zoom-mode='css']) .app-root { height: calc(100vh / var(--ui-scale)); }
+	:global(html[data-zoom-mode='css']) .app-root {
+		height: calc(100vh / var(--ui-scale));
+	}
 	.workspace {
 		flex: 1;
 		min-height: 0;

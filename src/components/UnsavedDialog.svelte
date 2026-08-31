@@ -2,6 +2,7 @@
 
 <script lang="ts">
 	import { focusTrap } from '../lib/focusTrap';
+	import { dismissable } from '../lib/dismissable';
 	import { tr } from '../lib/i18n';
 
 	const { open = false, onConfirm = () => {} } = $props<{
@@ -12,7 +13,7 @@
 
 {#if open}
 	<div class="backdrop" role="alertdialog" aria-modal="true">
-		<div class="modal" use:focusTrap>
+		<div class="modal" tabindex="-1" use:focusTrap use:dismissable={() => onConfirm('cancel')}>
 			<h2>{tr('unsaved.title')}</h2>
 			<p>{tr('unsaved.body')}</p>
 			<div class="actions">
@@ -28,7 +29,7 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0,0,0,.6);
+		background: rgba(0, 0, 0, 0.6);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -41,7 +42,7 @@
 		padding: 20px;
 		min-width: 360px;
 		max-width: 480px;
-		box-shadow: 0 8px 32px rgba(0,0,0,.5);
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 	}
 	.actions {
 		display: flex;

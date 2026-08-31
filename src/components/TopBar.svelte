@@ -31,7 +31,12 @@
 	import type { CompileReport } from '../lib/commands';
 	import HelpMenu from './HelpMenu.svelte';
 
-	let { onKitInformation = () => {}, onAbout = () => {}, onShortcuts = () => {}, onQuit = () => {} }: {
+	let {
+		onKitInformation = () => {},
+		onAbout = () => {},
+		onShortcuts = () => {},
+		onQuit = () => {}
+	}: {
 		onKitInformation?: () => void;
 		onAbout?: () => void;
 		onShortcuts?: () => void;
@@ -65,7 +70,7 @@
 	/** Reads the saved whole-interface scale, with 100% as the safe default. */
 	function initialUiScale(): UiScale {
 		const stored = Number(readMigratedStorage('stk-forge.ui-scale', 'stk-editor.ui-scale'));
-		return UI_SCALES.includes(stored as UiScale) ? stored as UiScale : 100;
+		return UI_SCALES.includes(stored as UiScale) ? (stored as UiScale) : 100;
 	}
 
 	/** Applies and persists a complete WebView scale, falling back to CSS zoom outside Tauri. */
@@ -147,7 +152,7 @@
 		try {
 			const out = await save({
 				defaultPath: `${$project.kit.name || 'kit'}.stk`,
-				filters: [{ name: 'SmplTrek Kit', extensions: ['stk'] }],
+				filters: [{ name: 'SmplTrek Kit', extensions: ['stk'] }]
 			});
 			if (!out) return;
 			const { exists } = await import('@tauri-apps/plugin-fs');
@@ -181,10 +186,14 @@
 			const stkPath = `${out as string}/${$project.kit.name}.stk`;
 			if (await exists(stkPath)) {
 				const report = await inspectStk(stkPath, $locale);
-				if (!report.valid && !(await ask(tr('export.overwrite_invalid', { path: stkPath }), { title: tr('export.title') }))) return;
+				if (
+					!report.valid &&
+					!(await ask(tr('export.overwrite_invalid', { path: stkPath }), { title: tr('export.title') }))
+				)
+					return;
 			}
 			const report = await exportKit(out as string, profile, true);
-			if (report) success(`export: ${report.paths.length} files — ${report.note}`);
+			if (report) success(tr('toast.export_done', { count: report.paths.length, note: report.note }));
 		} catch (e) {
 			error(String(e));
 		}
@@ -237,94 +246,406 @@
 		<span class="brand-name">{tr('app.title')}</span>
 	</div>
 	<div class="menu-wrap">
-		<button class="btn menu-trigger" type="button" aria-haspopup="menu" aria-expanded={openMenu === 'kit'} onclick={() => toggleMenu('kit')}>{tr('menu.kit')} <span class="menu-chevron" aria-hidden="true"></span></button>
+		<button
+			class="btn menu-trigger"
+			type="button"
+			aria-haspopup="menu"
+			aria-expanded={openMenu === 'kit'}
+			onclick={() => toggleMenu('kit')}>{tr('menu.kit')} <span class="menu-chevron" aria-hidden="true"></span></button
+		>
 		{#if openMenu === 'kit'}
 			<div class="menu" role="menu" aria-label={tr('menu.kit')}>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doNew(); }}><span>{tr('menu.new')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('N')}</span></button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doOpen(); }}><span>{tr('menu.open')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('O')}</span></button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); stkInspectOpen.set(true); }}>{tr('menu.open_compiled')}</button>
-				<button role="menuitem" type="button" aria-haspopup="true" aria-expanded={recentOpen} onclick={() => (recentOpen = !recentOpen)}>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doNew();
+					}}
+					><span>{tr('menu.new')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('N')}</span></button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doOpen();
+					}}
+					><span>{tr('menu.open')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('O')}</span
+					></button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						stkInspectOpen.set(true);
+					}}>{tr('menu.open_compiled')}</button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					aria-haspopup="true"
+					aria-expanded={recentOpen}
+					onclick={() => (recentOpen = !recentOpen)}
+				>
 					{tr('menu.recent')} <span class="recent-chevron" aria-hidden="true">›</span>
 				</button>
 				{#if recentOpen}
 					<div class="recent-kits" role="group" aria-label={tr('menu.recent')}>
 						{#each recentKits as kit}
-							<button data-testid="recent-kit" role="menuitem" type="button" title={kit.path} onclick={() => void doOpenRecent(kit.path)}>{recentLabel(kit.path)}</button>
+							<button
+								data-testid="recent-kit"
+								role="menuitem"
+								type="button"
+								title={kit.path}
+								onclick={() => void doOpenRecent(kit.path)}>{recentLabel(kit.path)}</button
+							>
 						{:else}
 							<span class="recent-empty">{tr('menu.no_recent')}</span>
 						{/each}
 					</div>
 				{/if}
 				<hr />
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doSave(); }}><span>{tr('menu.save')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('S')}</span></button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void saveAs(); }}><span>{tr('menu.save_as')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Shift+S')}</span></button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void undo(); }}><span>{tr('menu.undo')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Z')}</span></button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void redo(); }}><span>{tr('menu.redo')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Shift+Z')}</span></button>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doSave();
+					}}
+					><span>{tr('menu.save')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('S')}</span
+					></button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void saveAs();
+					}}
+					><span>{tr('menu.save_as')}</span><span class="shortcut" aria-hidden="true"
+						>{platformShortcut('Shift+S')}</span
+					></button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void undo();
+					}}
+					><span>{tr('menu.undo')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Z')}</span
+					></button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void redo();
+					}}
+					><span>{tr('menu.redo')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Shift+Z')}</span
+					></button
+				>
 				<hr />
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); onKitInformation(); }}>{tr('menu.kit_information')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doFindMissing(); }}>{tr('menu.find_missing')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void closeKit(); }}><span>{tr('menu.close')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('W')}</span></button>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						onKitInformation();
+					}}>{tr('menu.kit_information')}</button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doFindMissing();
+					}}>{tr('menu.find_missing')}</button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void closeKit();
+					}}
+					><span>{tr('menu.close')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('W')}</span
+					></button
+				>
 				<hr />
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); onQuit(); }}><span>{tr('menu.quit')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Q')}</span></button>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						onQuit();
+					}}
+					><span>{tr('menu.quit')}</span><span class="shortcut" aria-hidden="true">{platformShortcut('Q')}</span
+					></button
+				>
 			</div>
 		{/if}
 	</div>
 	<div class="menu-wrap">
-		<button class="btn menu-trigger" type="button" aria-haspopup="menu" aria-expanded={openMenu === 'export'} onclick={() => toggleMenu('export')}>{tr('menu.export')} <span class="menu-chevron" aria-hidden="true"></span></button>
+		<button
+			class="btn menu-trigger"
+			type="button"
+			aria-haspopup="menu"
+			aria-expanded={openMenu === 'export'}
+			onclick={() => toggleMenu('export')}
+			>{tr('menu.export')} <span class="menu-chevron" aria-hidden="true"></span></button
+		>
 		{#if openMenu === 'export'}
 			<div class="menu" role="menu" aria-label={tr('menu.export')}>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doCompile(); }}>{tr('menu.compile_file')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doExport('hardware'); }}>{tr('menu.export_sd')}</button>
-				<button role="menuitem" type="button" onclick={() => { closeMenu(); void doExport('full'); }}>{tr('menu.export_full')}</button>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doCompile();
+					}}>{tr('menu.compile_file')}</button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doExport('hardware');
+					}}>{tr('menu.export_sd')}</button
+				>
+				<button
+					role="menuitem"
+					type="button"
+					onclick={() => {
+						closeMenu();
+						void doExport('full');
+					}}>{tr('menu.export_full')}</button
+				>
 			</div>
 		{/if}
 	</div>
 	<div class="spacer"></div>
 	<div class="project-name" title={$projectPath ?? ''}>{$project.kit.name || '—'}</div>
 	<span class={`status-pill ${statusClass($status.kind)}`} title={statusLabel()}>{statusLabel()}</span>
-	<button class:save-ready={$dirty} class="btn save-button" type="button" onclick={() => void doSave()}>{tr('menu.save')}</button>
-	<button class="btn icon" type="button" onclick={() => void undo()} disabled={$undoStack.length === 0} aria-label={tr('menu.undo')} title={tr('menu.undo')}>↩</button>
-	<button class="btn icon" type="button" onclick={() => void redo()} disabled={$redoStack.length === 0} aria-label={tr('menu.redo')} title={tr('menu.redo')}>↪</button>
-	<select class="select" data-testid="ui-scale" aria-label={tr('display.scale')} value={uiScale} onchange={(event) => setUiScale(Number((event.target as HTMLSelectElement).value) as UiScale)}>
-		{#each UI_SCALES as value}<option value={value}>{value} %</option>{/each}
+	<button class:save-ready={$dirty} class="btn save-button" type="button" onclick={() => void doSave()}
+		>{tr('menu.save')}</button
+	>
+	<button
+		class="btn icon"
+		type="button"
+		onclick={() => void undo()}
+		disabled={$undoStack.length === 0}
+		aria-label={tr('menu.undo')}
+		title={tr('menu.undo')}>↩</button
+	>
+	<button
+		class="btn icon"
+		type="button"
+		onclick={() => void redo()}
+		disabled={$redoStack.length === 0}
+		aria-label={tr('menu.redo')}
+		title={tr('menu.redo')}>↪</button
+	>
+	<select
+		class="select"
+		data-testid="ui-scale"
+		aria-label={tr('display.scale')}
+		value={uiScale}
+		onchange={(event) => setUiScale(Number((event.target as HTMLSelectElement).value) as UiScale)}
+	>
+		{#each UI_SCALES as value}<option {value}>{value} %</option>{/each}
 	</select>
-	<button class="btn icon theme-toggle" data-testid="theme-toggle" type="button" onclick={toggleTheme} aria-label={tr(theme === 'dark' ? 'theme.switch_to_light' : 'theme.switch_to_dark')} title={tr(theme === 'dark' ? 'theme.switch_to_light' : 'theme.switch_to_dark')}>
+	<button
+		class="btn icon theme-toggle"
+		data-testid="theme-toggle"
+		type="button"
+		onclick={toggleTheme}
+		aria-label={tr(theme === 'dark' ? 'theme.switch_to_light' : 'theme.switch_to_dark')}
+		title={tr(theme === 'dark' ? 'theme.switch_to_light' : 'theme.switch_to_dark')}
+	>
 		<span aria-hidden="true">{theme === 'dark' ? '☀︎' : '☾'}</span>
 	</button>
-	<select class="select" aria-label={tr('menu.language')} value={$locale} onchange={(e) => setLocale((e.target as HTMLSelectElement).value as (typeof available)[number])}>
+	<select
+		class="select"
+		aria-label={tr('menu.language')}
+		value={$locale}
+		onchange={(e) => setLocale((e.target as HTMLSelectElement).value as (typeof available)[number])}
+	>
 		{#each available as l}<option value={l}>{languageName(l)}</option>{/each}
 	</select>
-	<HelpMenu icon onShortcuts={onShortcuts} onAbout={onAbout} />
+	<HelpMenu icon {onShortcuts} {onAbout} />
 </header>
 
 <style>
-	.topbar { display:flex; align-items:center; gap:10px; padding:4px 12px; background:var(--bg-2,#23272b); border-bottom:1px solid var(--line,#3a3f45); min-height:72px; }
-	.brand { display:flex; align-items:center; gap:10px; height:64px; white-space:nowrap; }
-	.brand-logo { display:block; width:64px; height:64px; flex:0 0 64px; }
-	.brand-logo :global(svg) { display:block; width:100%; height:100%; }
-	.brand-name { color:var(--accent,#d2a83f); font-weight:700; letter-spacing:.01em; }
-	.spacer { flex:1; }
-	.project-name { max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg-dim,#9aa0a6); }
-	.status-pill { padding:3px 10px; border-radius:12px; font-size:12px; font-weight:500; white-space:nowrap; }
-	.status-pill.saved { background:rgba(76,175,80,.15); color:var(--ok,#4caf50); }
-	.status-pill.modified { background:rgba(210,168,63,.15); color:var(--accent,#d2a83f); }
-	.status-pill.error { background:rgba(231,76,60,.15); color:var(--err,#e74c3c); }
-	.btn, .select { background:var(--bg-3,#2e3338); color:var(--fg,#e6e6e6); border:1px solid var(--line,#3a3f45); border-radius:4px; cursor:pointer; }
-	.btn { padding:4px 10px; line-height:1.1; }
-	.btn:hover, .btn[aria-expanded="true"] { background:var(--bg-4,#39414b); }
-	.save-ready { background:rgba(76,175,80,.2); border-color:var(--ok,#4caf50); color:var(--ok,#4caf50); font-weight:700; }
-	.btn:disabled { opacity:.5; cursor:not-allowed; }
-	.icon { min-width:31px; font-weight:700; }
-	.menu-chevron { display:inline-block; width:0; height:0; margin-left:7px; border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid currentColor; vertical-align:middle; transform:translateY(1px); }
-	.select { padding:4px 8px; }
-	.menu-wrap { position:relative; }
-	.menu { position:absolute; top:calc(100% + 5px); left:0; z-index:250; min-width:220px; padding:4px; background:#3a4047; border:1px solid #59616a; border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.35); }
-	.menu button { display:flex; justify-content:space-between; gap:16px; width:100%; padding:7px 9px; border:0; border-radius:4px; background:transparent; color:var(--fg,#e6e6e6); text-align:left; cursor:pointer; font:inherit; font-size:13px; }
-	.shortcut { color:var(--fg-dim,#9aa0a6); font-size:12px; white-space:nowrap; }
-	.menu button:hover, .menu button:focus-visible { background:var(--bg-3,#2e3338); outline:none; }
-	.menu hr { height:1px; margin:4px 2px; border:0; background:var(--line,#3a3f45); }
-	.recent-chevron { float:right; font-size:16px; line-height:12px; }
-	.recent-kits { margin:2px 0 4px 8px; padding-left:4px; border-left:1px solid var(--line,#3a3f45); }
-	.recent-kits button { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-	.recent-empty { display:block; padding:7px 9px; color:var(--fg-dim,#9aa0a6); font-size:13px; }
+	.topbar {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 4px 12px;
+		background: var(--bg-2, #23272b);
+		border-bottom: 1px solid var(--line, #3a3f45);
+		min-height: 72px;
+	}
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		height: 64px;
+		white-space: nowrap;
+	}
+	.brand-logo {
+		display: block;
+		width: 64px;
+		height: 64px;
+		flex: 0 0 64px;
+		object-fit: contain;
+	}
+	.brand-name {
+		color: var(--accent, #d2a83f);
+		font-weight: 700;
+		letter-spacing: 0.01em;
+	}
+	.spacer {
+		flex: 1;
+	}
+	.project-name {
+		max-width: 180px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--fg-dim, #9aa0a6);
+	}
+	.status-pill {
+		padding: 3px 10px;
+		border-radius: 12px;
+		font-size: 12px;
+		font-weight: 500;
+		white-space: nowrap;
+	}
+	.status-pill.saved {
+		background: rgba(76, 175, 80, 0.15);
+		color: var(--ok, #4caf50);
+	}
+	.status-pill.modified {
+		background: rgba(210, 168, 63, 0.15);
+		color: var(--accent, #d2a83f);
+	}
+	.status-pill.error {
+		background: rgba(231, 76, 60, 0.15);
+		color: var(--err, #e74c3c);
+	}
+	.btn,
+	.select {
+		background: var(--bg-3, #2e3338);
+		color: var(--fg, #e6e6e6);
+		border: 1px solid var(--line, #3a3f45);
+		border-radius: 4px;
+		cursor: pointer;
+	}
+	.btn {
+		padding: 4px 10px;
+		line-height: 1.1;
+	}
+	.btn:hover,
+	.btn[aria-expanded='true'] {
+		background: var(--bg-4, #39414b);
+	}
+	.save-ready {
+		background: rgba(76, 175, 80, 0.2);
+		border-color: var(--ok, #4caf50);
+		color: var(--ok, #4caf50);
+		font-weight: 700;
+	}
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.icon {
+		min-width: 31px;
+		font-weight: 700;
+	}
+	.menu-chevron {
+		display: inline-block;
+		width: 0;
+		height: 0;
+		margin-left: 7px;
+		border-left: 4px solid transparent;
+		border-right: 4px solid transparent;
+		border-top: 6px solid currentColor;
+		vertical-align: middle;
+		transform: translateY(1px);
+	}
+	.select {
+		padding: 4px 8px;
+	}
+	.menu-wrap {
+		position: relative;
+	}
+	.menu {
+		position: absolute;
+		top: calc(100% + 5px);
+		left: 0;
+		z-index: 250;
+		min-width: 220px;
+		padding: 4px;
+		background: #3a4047;
+		border: 1px solid #59616a;
+		border-radius: 6px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+	.menu button {
+		display: flex;
+		justify-content: space-between;
+		gap: 16px;
+		width: 100%;
+		padding: 7px 9px;
+		border: 0;
+		border-radius: 4px;
+		background: transparent;
+		color: var(--fg, #e6e6e6);
+		text-align: left;
+		cursor: pointer;
+		font: inherit;
+		font-size: 13px;
+	}
+	.shortcut {
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.menu button:hover,
+	.menu button:focus-visible {
+		background: var(--bg-3, #2e3338);
+		outline: none;
+	}
+	.menu hr {
+		height: 1px;
+		margin: 4px 2px;
+		border: 0;
+		background: var(--line, #3a3f45);
+	}
+	.recent-chevron {
+		float: right;
+		font-size: 16px;
+		line-height: 12px;
+	}
+	.recent-kits {
+		margin: 2px 0 4px 8px;
+		padding-left: 4px;
+		border-left: 1px solid var(--line, #3a3f45);
+	}
+	.recent-kits button {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.recent-empty {
+		display: block;
+		padding: 7px 9px;
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 13px;
+	}
 </style>

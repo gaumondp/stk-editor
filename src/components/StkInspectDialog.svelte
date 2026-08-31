@@ -2,10 +2,10 @@
 
 <script lang="ts">
 	import { focusTrap } from '../lib/focusTrap';
+	import { dismissable } from '../lib/dismissable';
 	import { api } from '../lib/commands';
 	import { getLocale, tr } from '../lib/i18n';
 	import { success as notifySuccess, error as notifyError } from '../stores/notify';
-
 
 	let { open = false, onClose = () => {} }: { open: boolean; onClose: () => void } = $props();
 
@@ -90,6 +90,7 @@
 			aria-label={tr('inspect.title')}
 			tabindex="-1"
 			use:focusTrap
+			use:dismissable={onClose}
 		>
 			<div class="header">
 				<h2>{tr('inspect.title')}</h2>
@@ -197,31 +198,161 @@
 {/if}
 
 <style>
-	.backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 240; }
-	.modal { background: var(--bg-2, #23272b); border: 1px solid var(--line, #3a3f45); border-radius: 12px; width: min(760px, 92vw); max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.5); overflow: hidden; }
-	.header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px 0; }
-	h2 { margin: 0; font-size: 16px; }
-	.close { background: none; border: none; color: var(--fg-dim); font-size: 22px; cursor: pointer; }
-	.actions { display: flex; gap: 8px; padding: 12px 20px; align-items: center; }
-	.path-input { flex: 1; padding: 6px 8px; background: var(--bg, #1a1d21); border: 1px solid var(--line); border-radius: 6px; color: var(--fg); font-size: 12px; }
-	.summary { margin: 0 20px; padding: 8px 10px; border-radius: 6px; font-size: 12px; display: flex; gap: 10px; align-items: center; background: rgba(76,175,80,0.1); border: 1px solid rgba(76,175,80,0.3); }
-	.summary.invalid { background: rgba(231,76,60,0.1); border-color: rgba(231,76,60,0.3); }
-	.badge { padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 11px; }
-	.badge.ok { background: var(--ok, #4caf50); color: #fff; }
-	.badge.err { background: var(--err, #e74c3c); color: #fff; }
-	h3 { margin: 12px 20px 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-dim); }
-	.list { list-style: none; padding: 0 20px; margin: 0; font-size: 12px; }
-	.list.error li { color: #e74c3c; }
-	.list.warn li { color: #f0ad4e; }
-	.list.info li { color: var(--fg-dim); }
-	.pads { width: calc(100% - 40px); margin: 0 20px; border-collapse: collapse; font-size: 11px; }
-	.pads th, .pads td { padding: 4px 6px; border-bottom: 1px solid var(--line, #3a3f45); text-align: left; }
-	.pads th { color: var(--fg-dim); font-weight: 600; }
-	.pads .path { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.pads tr.invalid { background: rgba(231,76,60,0.08); }
-	.footer { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--line); }
-	.btn { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg-3, #2e3338); color: var(--fg); cursor: pointer; }
-	.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.btn.primary { background: var(--accent, #d2a83f); color: #1a1d21; border-color: var(--accent); font-weight: 600; }
-	.error { color: #e74c3c; padding: 0 20px; font-size: 12px; }
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 240;
+	}
+	.modal {
+		background: var(--bg-2, #23272b);
+		border: 1px solid var(--line, #3a3f45);
+		border-radius: 12px;
+		width: min(760px, 92vw);
+		max-height: 88vh;
+		display: flex;
+		flex-direction: column;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+		overflow: hidden;
+	}
+	.header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 16px 20px 0;
+	}
+	h2 {
+		margin: 0;
+		font-size: 16px;
+	}
+	.close {
+		background: none;
+		border: none;
+		color: var(--fg-dim);
+		font-size: 22px;
+		cursor: pointer;
+	}
+	.actions {
+		display: flex;
+		gap: 8px;
+		padding: 12px 20px;
+		align-items: center;
+	}
+	.path-input {
+		flex: 1;
+		padding: 6px 8px;
+		background: var(--bg, #1a1d21);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		color: var(--fg);
+		font-size: 12px;
+	}
+	.summary {
+		margin: 0 20px;
+		padding: 8px 10px;
+		border-radius: 6px;
+		font-size: 12px;
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		background: rgba(76, 175, 80, 0.1);
+		border: 1px solid rgba(76, 175, 80, 0.3);
+	}
+	.summary.invalid {
+		background: rgba(231, 76, 60, 0.1);
+		border-color: rgba(231, 76, 60, 0.3);
+	}
+	.badge {
+		padding: 2px 8px;
+		border-radius: 10px;
+		font-weight: 600;
+		font-size: 11px;
+	}
+	.badge.ok {
+		background: var(--ok, #4caf50);
+		color: #fff;
+	}
+	.badge.err {
+		background: var(--err, #e74c3c);
+		color: #fff;
+	}
+	h3 {
+		margin: 12px 20px 6px;
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--fg-dim);
+	}
+	.list {
+		list-style: none;
+		padding: 0 20px;
+		margin: 0;
+		font-size: 12px;
+	}
+	.list.error li {
+		color: #e74c3c;
+	}
+	.list.warn li {
+		color: #f0ad4e;
+	}
+	.list.info li {
+		color: var(--fg-dim);
+	}
+	.pads {
+		width: calc(100% - 40px);
+		margin: 0 20px;
+		border-collapse: collapse;
+		font-size: 11px;
+	}
+	.pads th,
+	.pads td {
+		padding: 4px 6px;
+		border-bottom: 1px solid var(--line, #3a3f45);
+		text-align: left;
+	}
+	.pads th {
+		color: var(--fg-dim);
+		font-weight: 600;
+	}
+	.pads .path {
+		max-width: 240px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.pads tr.invalid {
+		background: rgba(231, 76, 60, 0.08);
+	}
+	.footer {
+		display: flex;
+		justify-content: flex-end;
+		padding: 12px 20px;
+		border-top: 1px solid var(--line);
+	}
+	.btn {
+		padding: 6px 12px;
+		border-radius: 6px;
+		border: 1px solid var(--line);
+		background: var(--bg-3, #2e3338);
+		color: var(--fg);
+		cursor: pointer;
+	}
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.btn.primary {
+		background: var(--accent, #d2a83f);
+		color: #1a1d21;
+		border-color: var(--accent);
+		font-weight: 600;
+	}
+	.error {
+		color: #e74c3c;
+		padding: 0 20px;
+		font-size: 12px;
+	}
 </style>

@@ -4,39 +4,60 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-const OFFICIAL_MAGIC: &[u8; 4] = b"VDK0";
-const LEGACY_MAGIC: &[u8; 8] = b"VDK0PR \0";
-const HEADER_FILE_SIZE_ADJUSTMENT: usize = 360;
-const KTDT_TAG: &[u8; 4] = b"KTDT";
-const KTDT_SIZE: usize = 0x1084; // 4228
-const HEADER_SIZE: usize = 32;
-const ENTRY_SIZE: usize = 280;
-const PATH_FIELD: usize = 256;
+use crate::stk_format::{
+	read_le_u32, take, ENTRY_SIZE, FIRST_ISDT_OFFSET, HEADER_FILE_SIZE_ADJUSTMENT, HEADER_SIZE,
+	KTDT_SIZE, KTDT_TAG, PATH_FIELD,
+};
 
+const OFFICIAL_MAGIC: &[u8; 4] = crate::stk_format::VDK0_MAGIC;
+const LEGACY_MAGIC: &[u8; 8] = b"VDK0PR \0";
+
+/// One pad's decoded parameters and validation state, as read from a `.STK`
+/// KTDT block during inspection.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StkPadInfo {
+	/// 1-based pad number (1..=16).
 	pub pad: u8,
+	/// Internal audio path stored in the archive for this pad.
 	pub path: String,
+	/// Playback volume (device range 0..=100).
 	pub volume: u8,
+	/// Stereo pan (device range -64..=63).
 	pub pan: i8,
+	/// Pitch offset in cents (device range ±1200).
 	pub pitch: i32,
+	/// FX send level (device range 0..=127).
 	pub fx_send: u8,
+	/// True when every field is within its device-valid range.
 	pub valid: bool,
+	/// Per-pad, locale-formatted warnings gathered during validation.
 	pub warnings: Vec<String>,
 }
 
+/// Full diagnostic report produced by [`inspect`] for a `.STK` archive.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StkInspectReport {
+	/// Path that was inspected.
 	pub path: String,
+	/// Overall verdict: no errors and header + KTDT both intact.
 	pub valid: bool,
+	/// Total file size in bytes.
 	pub bytes: u64,
+	/// True when the 32-byte main header passes all fixed-field checks.
 	pub header_ok: bool,
+	/// True when the KTDT tag and size are correct and the body is present.
 	pub ktdt_ok: bool,
+	/// Number of pad slots in the archive (always 16 for fw 3.2).
 	pub pads_total: usize,
+	/// Number of pads carrying a real (non-placeholder) sample.
 	pub pads_filled: usize,
+	/// Decoded per-pad details.
 	pub pads: Vec<StkPadInfo>,
+	/// Blocking, locale-formatted errors (any entry makes the archive invalid).
 	pub errors: Vec<String>,
+	/// Non-blocking, locale-formatted warnings.
 	pub warnings: Vec<String>,
+	/// Informational, locale-formatted notes (e.g. pad-fill summary).
 	pub info: Vec<String>,
 }
 
@@ -69,13 +90,21 @@ fn tr(key: &str, locale: &str) -> String {
 }
 
 fn read_le32(b: &[u8]) -> u32 {
-	u32::from_le_bytes([b[0], b[1], b[2], b[3]])
+	// Bounds-checked: a short slice reads as 0 rather than panicking. Callers
+	// that need to distinguish absence use the shared take()/read_le_u32.
+	crate::stk_format::read_le_u32(b, 0).unwrap_or(0)
 }
 
 fn has_valid_header(data: &[u8]) -> bool {
-	let official = &data[0..4] == OFFICIAL_MAGIC
-		&& read_le32(&data[4..8]) == (data.len() - HEADER_FILE_SIZE_ADJUSTMENT) as u32;
-	official || &data[0..8] == LEGACY_MAGIC
+	// The official layout stores (file_len - 360) at offset 4. For files
+	// shorter than the 360-byte container overhead that subtraction would
+	// underflow, so guard it with checked_sub before comparing.
+	let official = take(data, 0, 4) == Some(OFFICIAL_MAGIC.as_slice())
+		&& match data.len().checked_sub(HEADER_FILE_SIZE_ADJUSTMENT) {
+			Some(expected) => read_le_u32(data, 4) == Some(expected as u32),
+			None => false,
+		};
+	official || take(data, 0, 8) == Some(LEGACY_MAGIC.as_slice())
 }
 
 pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
@@ -92,6 +121,43 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 	let mut errors: Vec<String> = Vec::new();
 	let mut warnings: Vec<String> = Vec::new();
 	let mut info: Vec<String> = Vec::new();
+
+	let (header_ok, ktdt_ok) = inspect_header(&data, locale, &mut errors, &mut warnings);
+
+	let (pads, pads_filled) = inspect_ktdt_pads(&data, locale, &mut warnings);
+
+	inspect_audio_section(&data, locale, &mut errors, &mut warnings, &mut info);
+
+	let valid = errors.is_empty() && header_ok && ktdt_ok;
+	if valid && warnings.is_empty() {
+		info.push(tr("info_ok", locale));
+	}
+	info.push(format!("{}: {pads_filled}/15", tr("info_pads", locale)));
+
+	Ok(StkInspectReport {
+		path: path.to_string(),
+		valid,
+		bytes,
+		header_ok,
+		ktdt_ok,
+		pads_total: 16,
+		pads_filled,
+		pads,
+		errors,
+		warnings,
+		info,
+	})
+}
+
+/// Validate the 32-byte main header and the presence of the KTDT body,
+/// recording any problems into `errors`/`warnings`. Returns
+/// `(header_ok, ktdt_ok)`.
+fn inspect_header(
+	data: &[u8],
+	locale: &str,
+	errors: &mut Vec<String>,
+	warnings: &mut Vec<String>,
+) -> (bool, bool) {
 	let mut header_ok = true;
 	let mut ktdt_ok = true;
 
@@ -100,7 +166,7 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 		errors.push(tr("err_truncated_header", locale));
 		header_ok = false;
 	} else {
-		if !has_valid_header(&data) {
+		if !has_valid_header(data) {
 			errors.push(tr("err_magic", locale));
 			header_ok = false;
 		}
@@ -128,7 +194,17 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 		ktdt_ok = false;
 	}
 
-	// Parse KTDT pads
+	(header_ok, ktdt_ok)
+}
+
+/// Decode the 15 real pad entries from the KTDT block (plus the reserved pad
+/// 16), gathering per-pad warnings into `warnings`. Returns the pad list and
+/// the count of pads carrying a real sample.
+fn inspect_ktdt_pads(
+	data: &[u8],
+	locale: &str,
+	warnings: &mut Vec<String>,
+) -> (Vec<StkPadInfo>, usize) {
 	let mut pads: Vec<StkPadInfo> = Vec::new();
 	let mut pads_filled = 0usize;
 
@@ -216,6 +292,19 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 		});
 	}
 
+	(pads, pads_filled)
+}
+
+/// Walk the audio section, counting ISDT records and best-effort validating
+/// each embedded WAV (sample rate / bit depth / RIFF integrity). Records any
+/// findings into `errors`/`warnings` and a summary line into `info`.
+fn inspect_audio_section(
+	data: &[u8],
+	locale: &str,
+	errors: &mut Vec<String>,
+	warnings: &mut Vec<String>,
+	info: &mut Vec<String>,
+) {
 	// Audio section validation — look for ISDT + WAV pattern
 	if data.len() > HEADER_SIZE + KTDT_SIZE {
 		let audio = &data[HEADER_SIZE + KTDT_SIZE..];
@@ -224,7 +313,8 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 		} else {
 			// The first ISDT belongs to sample 1 but is embedded in KTDT; the
 			// remaining records live in the audio section before samples 2–15.
-			let embedded_first_isdt = &data[HEADER_SIZE + 4212..HEADER_SIZE + 4216] == b"ISDT";
+			let embedded_first_isdt =
+				take(data, HEADER_SIZE + FIRST_ISDT_OFFSET, 4) == Some(b"ISDT".as_slice());
 			let isdt_count = audio.windows(4).filter(|w| w == b"ISDT").count()
 				+ if embedded_first_isdt { 1 } else { 0 };
 			if isdt_count < 15 {
@@ -257,11 +347,11 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 				}
 				let wav_bytes = &audio[offset..wav_end];
 				// Validate via wav parser
-				if let Ok(info) = crate::wav::parse_wav_for_inspect(wav_bytes) {
-					if info.sample_rate != 48000 {
+				if let Ok(info_wav) = crate::wav::parse_wav_for_inspect(wav_bytes) {
+					if info_wav.sample_rate != 48000 {
 						warnings.push(format!("Pad {}: {}", wav_idx + 1, tr("warn_wav_rate", locale)));
 					}
-					if info.bits != 16 {
+					if info_wav.bits != 16 {
 						warnings.push(format!("Pad {}: {}", wav_idx + 1, tr("warn_wav_bits", locale)));
 					}
 				} else {
@@ -280,26 +370,6 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 			info.push(format!("Audio section: {} WAV(s) found", wav_idx));
 		}
 	}
-
-	let valid = errors.is_empty() && header_ok && ktdt_ok;
-	if valid && warnings.is_empty() {
-		info.push(tr("info_ok", locale));
-	}
-	info.push(format!("{}: {pads_filled}/15", tr("info_pads", locale)));
-
-	Ok(StkInspectReport {
-		path: path.to_string(),
-		valid,
-		bytes,
-		header_ok,
-		ktdt_ok,
-		pads_total: 16,
-		pads_filled,
-		pads,
-		errors,
-		warnings,
-		info,
-	})
 }
 
 // ── Safe extraction of a third-party .stk into an editable kit ──────────────
@@ -318,26 +388,42 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 /// Per-pad summary of what extraction produced.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedPad {
+	/// 1-based pad number.
 	pub pad: u8,
+	/// Name of the WAV written under `samples/`, or `None` if the pad was empty.
 	pub wav_file: Option<String>,
+	/// Size of the extracted WAV in bytes (0 when no WAV was written).
 	pub bytes: u64,
+	/// Playback volume copied from the archive.
 	pub volume: u8,
+	/// Stereo pan copied from the archive.
 	pub pan: i8,
+	/// Pitch offset copied from the archive.
 	pub pitch: i32,
+	/// FX send level copied from the archive.
 	pub fx_send: u8,
 }
 
 /// Result of a successful extraction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StkExtractReport {
+	/// Source `.stk` path that was read (never modified).
 	pub source: String,
+	/// SHA-256 of the source bytes, for provenance.
 	pub source_sha256: String,
+	/// Destination directory the kit was written into.
 	pub dest_dir: String,
+	/// Path of the canonical `Project` JSON companion written at the kit root.
 	pub json_path: String,
+	/// Path of the `extraction.json` provenance manifest.
 	pub manifest_path: String,
+	/// Kit name (from the caller or derived from the source file stem).
 	pub kit_name: String,
+	/// Number of WAV files written under `samples/`.
 	pub wavs_written: usize,
+	/// Per-pad extraction details.
 	pub pads: Vec<ExtractedPad>,
+	/// Human-readable note about what a `.stk` cannot restore.
 	pub note: String,
 }
 
@@ -375,23 +461,7 @@ fn tr_ex(key: &str, locale: &str) -> String {
 }
 
 fn sha256_hex(data: &[u8]) -> String {
-	use sha2::{Digest, Sha256};
-	let mut hasher = Sha256::new();
-	hasher.update(data);
-	let mut hex = String::with_capacity(64);
-	for b in hasher.finalize() {
-		use std::fmt::Write;
-		let _ = write!(hex, "{b:02x}");
-	}
-	hex
-}
-
-fn now_secs() -> u64 {
-	use std::time::{SystemTime, UNIX_EPOCH};
-	SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.map(|d| d.as_secs())
-		.unwrap_or(0)
+	crate::stk_format::sha256_hex(data)
 }
 
 /// Sanitize a pad filename derived from an untrusted embedded path. Strips any
@@ -454,19 +524,80 @@ pub fn extract(
 	kit_name: Option<&str>,
 	locale: &str,
 ) -> Result<StkExtractReport, String> {
-	// 1. Validate the source WITHOUT touching it. Refuse malformed input.
+	// 1. Validate the source WITHOUT touching it, then read its bytes.
+	let (report, data, source_sha256) = extract_validate_and_read(stk_path, locale)?;
+	let src = Path::new(stk_path);
+
+	// 2. Prepare a clean destination.
+	let (dest, samples_dir) = extract_prepare_dest(dest_dir, locale)?;
+
+	// 3. Split the audio section into per-pad WAVs (byte-range copy).
+	let audio = &data[HEADER_SIZE + KTDT_SIZE..];
+	let wavs = split_wavs(audio);
+
+	let kit_name = kit_name
+		.map(|s| s.trim())
+		.filter(|s| !s.is_empty())
+		.map(|s| s.to_string())
+		.unwrap_or_else(|| {
+			src.file_stem()
+				.map(|s| s.to_string_lossy().into_owned())
+				.unwrap_or_else(|| "ExtractedKit".to_string())
+		});
+
+	// 4. Rebuild pads from the KTDT params + write WAVs. Pad 16 is reserved.
+	let (pads_json, extracted, wavs_written) =
+		extract_rebuild_pads(&report, &wavs, &samples_dir)?;
+
+	// 5-6. Write the Project JSON companion and the provenance manifest.
+	let note = tr_ex("note", locale);
+	let (json_path, manifest_path) = extract_write_companions(
+		&dest,
+		&kit_name,
+		pads_json,
+		&note,
+		&source_sha256,
+		src,
+		wavs_written,
+		report.pads_filled,
+	)?;
+
+	Ok(StkExtractReport {
+		source: stk_path.to_string(),
+		source_sha256,
+		dest_dir: dest.to_string_lossy().into_owned(),
+		json_path: json_path.to_string_lossy().into_owned(),
+		manifest_path: manifest_path.to_string_lossy().into_owned(),
+		kit_name,
+		wavs_written,
+		pads: extracted,
+		note,
+	})
+}
+
+/// Validate the source archive without modifying it, then read its bytes and
+/// fingerprint. Returns the inspection report, the raw bytes, and the source
+/// SHA-256. Errors (writing nothing) when the archive is invalid or unreadable.
+fn extract_validate_and_read(
+	stk_path: &str,
+	locale: &str,
+) -> Result<(StkInspectReport, Vec<u8>, String), String> {
 	let report = inspect(stk_path, locale)?;
 	if !report.valid {
 		let detail = report.errors.join("; ");
 		return Err(format!("{}{}", tr_ex("err_invalid", locale),
 			if detail.is_empty() { String::new() } else { format!(" ({detail})") }));
 	}
-
 	let src = Path::new(stk_path);
 	let data = std::fs::read(src).map_err(|e| format!("{}: {e}", tr("err_not_found", locale)))?;
 	let source_sha256 = sha256_hex(&data);
+	Ok((report, data, source_sha256))
+}
 
-	// 2. Prepare a clean destination.
+/// Ensure `dest_dir` is a clean target (created if absent, refused if it is a
+/// file or a non-empty directory) and create its `samples/` subdirectory.
+/// Returns `(dest, samples_dir)`.
+fn extract_prepare_dest(dest_dir: &str, locale: &str) -> Result<(PathBuf, PathBuf), String> {
 	let dest = PathBuf::from(dest_dir);
 	if dest.is_file() {
 		return Err(tr_ex("err_dest_is_file", locale));
@@ -484,22 +615,21 @@ pub fn extract(
 	}
 	let samples_dir = dest.join("samples");
 	std::fs::create_dir_all(&samples_dir).map_err(|e| e.to_string())?;
+	Ok((dest, samples_dir))
+}
 
-	// 3. Split the audio section into per-pad WAVs (byte-range copy).
-	let audio = &data[HEADER_SIZE + KTDT_SIZE..];
-	let wavs = split_wavs(audio);
+/// Output of [`extract_rebuild_pads`]: the `pads` JSON map, the per-pad
+/// extraction summaries, and the count of WAVs written.
+type RebuiltPads = (serde_json::Map<String, serde_json::Value>, Vec<ExtractedPad>, usize);
 
-	let kit_name = kit_name
-		.map(|s| s.trim())
-		.filter(|s| !s.is_empty())
-		.map(|s| s.to_string())
-		.unwrap_or_else(|| {
-			src.file_stem()
-				.map(|s| s.to_string_lossy().into_owned())
-				.unwrap_or_else(|| "ExtractedKit".to_string())
-		});
-
-	// 4. Rebuild pads from the KTDT params + write WAVs. Pad 16 is reserved.
+/// Rebuild the editable pads: write each filled pad's WAV under `samples_dir`
+/// (de-duplicating name collisions), copy the pad parameters, and build the
+/// `pads` JSON map. Returns `(pads_json, extracted_pads, wavs_written)`.
+fn extract_rebuild_pads(
+	report: &StkInspectReport,
+	wavs: &[Vec<u8>],
+	samples_dir: &Path,
+) -> Result<RebuiltPads, String> {
 	let mut pads_json = serde_json::Map::new();
 	let mut extracted = Vec::new();
 	let mut wavs_written = 0usize;
@@ -555,8 +685,24 @@ pub fn extract(
 		}
 	}
 
-	// 5. Write the canonical Project JSON companion (matches models::Project).
-	let note = tr_ex("note", locale);
+	Ok((pads_json, extracted, wavs_written))
+}
+
+/// Write the two companion files: the canonical `Project` JSON (matching
+/// `models::Project`) at the kit root, and the `extraction.json` provenance
+/// manifest. Returns `(json_path, manifest_path)`.
+#[allow(clippy::too_many_arguments)]
+fn extract_write_companions(
+	dest: &Path,
+	kit_name: &str,
+	pads_json: serde_json::Map<String, serde_json::Value>,
+	note: &str,
+	source_sha256: &str,
+	src: &Path,
+	wavs_written: usize,
+	pads_filled: usize,
+) -> Result<(PathBuf, PathBuf), String> {
+	// Canonical Project JSON companion (matches models::Project).
 	let project = serde_json::json!({
 		"format": crate::models::PROJECT_FORMAT,
 		"fmtVersion": crate::models::PROJECT_FORMAT_VERSION,
@@ -569,43 +715,56 @@ pub fn extract(
 			"notes": note,
 		}
 	});
-	let json_path = dest.join(format!("{}.json", sanitize_name(&kit_name)));
+	let json_path = dest.join(format!("{}.json", crate::stk_format::sanitize_kit_filename(kit_name)));
 	std::fs::write(&json_path, serde_json::to_string_pretty(&project).map_err(|e| e.to_string())?)
 		.map_err(|e| e.to_string())?;
 
-	// 6. Write the provenance manifest.
+	// Provenance manifest.
 	let manifest = serde_json::json!({
 		"extractedFrom": src.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
 		"sourceSha256": source_sha256,
-		"extractedAtUnix": now_secs(),
+		"extractedAtUnix": crate::stk_format::unix_now_secs(),
 		"wavsWritten": wavs_written,
-		"padsFilled": report.pads_filled,
+		"padsFilled": pads_filled,
 		"unrecoverable": note,
 	});
 	let manifest_path = dest.join("extraction.json");
 	std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
 		.map_err(|e| e.to_string())?;
 
-	Ok(StkExtractReport {
-		source: stk_path.to_string(),
-		source_sha256,
-		dest_dir: dest.to_string_lossy().into_owned(),
-		json_path: json_path.to_string_lossy().into_owned(),
-		manifest_path: manifest_path.to_string_lossy().into_owned(),
-		kit_name,
-		wavs_written,
-		pads: extracted,
-		note,
-	})
+	Ok((json_path, manifest_path))
 }
 
-fn sanitize_name(name: &str) -> String {
-	let cleaned: String = name
-		.chars()
-		.filter(|c| *c != '/' && *c != '\\' && *c != '\0')
-		.collect();
-	let t = cleaned.trim();
-	if t.is_empty() { "kit".to_string() } else { t.to_string() }
+#[cfg(test)]
+mod inspect_tests {
+	use super::*;
+
+	// A 100-byte file starts with the magic but is far shorter than the 360-byte
+	// container overhead. This is the case that used to underflow
+	// data.len() - HEADER_FILE_SIZE_ADJUSTMENT. It must produce an invalid
+	// report (or Err) and must not panic.
+	#[test]
+	fn inspect_100_byte_stk_does_not_panic() {
+		let dir = std::env::temp_dir().join(format!(
+			"stk_inspect_100_{}_{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_nanos()
+		));
+		std::fs::create_dir_all(&dir).unwrap();
+		let f = dir.join("tiny.stk");
+		let mut bytes = vec![0u8; 100];
+		bytes[0..4].copy_from_slice(OFFICIAL_MAGIC); // magic present, body absent
+		std::fs::write(&f, &bytes).unwrap();
+
+		let rep = inspect(f.to_str().unwrap(), "en").expect("inspect returns a report, not a panic");
+		assert!(!rep.valid, "a 100-byte .stk cannot be a valid archive");
+		assert!(!rep.errors.is_empty(), "truncation must be reported as an error");
+
+		let _ = std::fs::remove_dir_all(&dir);
+	}
 }
 
 #[cfg(test)]

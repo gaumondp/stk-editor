@@ -5,6 +5,7 @@
 
 pub mod models;
 pub mod profile;
+pub mod stk_format;
 pub mod wav;
 pub mod compile;
 pub mod stk_inspect;
@@ -28,46 +29,51 @@ use std::fs;
 
 const REC_MAX: usize = 12;
 
+/// One entry in the recent-kits list (spec §15).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentEntry {
+      /// Canonical absolute path to the project JSON.
       pub path: String,
+      /// Display name (kit name, or filename fallback).
       pub name: String,
+      /// ISO-ish timestamp of the last open.
       #[serde(default)]
      pub last_opened: String,
+      /// ISO-ish timestamp of the last modification.
       #[serde(default)]
      pub last_modified: String,
+      /// True when the project file itself no longer exists on disk.
       #[serde(default)]
      pub missing: bool,
+      /// True when one or more of the kit's referenced samples are missing.
       #[serde(default)]
      pub has_missing_files: bool,
+      /// True when the project has unsaved edits.
       #[serde(default)]
      pub unsaved: bool
 }
 
+/// The persisted recent-kits list, newest first.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct RecentStore {
+     /// Recent entries in MRU order, capped at [`REC_MAX`].
      pub entries: Vec<RecentEntry>
 }
 
 fn now_iso() -> String {
-       chrono_now()
+       // Seconds since 1970 -> approximate ISO; good enough for ordering/UI.
+       format!("{}s", crate::stk_format::unix_now_secs())
 }
 
-fn chrono_now() -> String {
-        // Minimal UTC timestamp without pulling chrono at runtime cost.
-      use std::time::{SystemTime, UNIX_EPOCH};
-       let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-      // seconds since 1970 -> approximate ISO; good enough for ordering/UI.
-      format!("{}s", secs)
-}
-
+/// Absolute path to the recent-kits store (`<data_local>/stk-forge/recent.json`).
 pub fn prefs_path() -> Result<PathBuf, String> {
        let dir = dirs::data_local_dir().ok_or("no data dir")?;
       Ok(dir.join("stk-forge").join("recent.json"))
 }
 
+/// Load the recent-kits store, returning an empty store if none exists yet.
 pub fn load_recent() -> Result<RecentStore, String> {
        let p = prefs_path()?;
       if !p.exists() {
@@ -77,6 +83,7 @@ pub fn load_recent() -> Result<RecentStore, String> {
       serde_json::from_str(&raw).map_err(|e| format!("parse recent: {e}"))
 }
 
+/// Persist the recent-kits store, creating the parent directory as needed.
 pub fn save_recent(store: &RecentStore) -> Result<(), String> {
        let p = prefs_path()?;
       if let Some(d) = p.parent() {
@@ -103,7 +110,7 @@ pub fn touch_recent(path: &str, name: &str) -> Result<RecentStore, String> {
           },
         last_opened: now_iso(),
         last_modified: now_iso(),
-        missing: p == path,
+        missing: false,
         has_missing_files: false,
         unsaved: false
          };
@@ -138,10 +145,12 @@ fn check_missing_files(project_path: &str) -> bool {
       false
 }
 
+/// Empty the recent-kits list.
 pub fn clear_recent() -> Result<(), String> {
        save_recent(&RecentStore::default())
 }
 
+/// Remove a single kit from the recent list, matched by path or filename.
 pub fn remove_recent(path: &str) -> Result<RecentStore, String> {
        let mut store = load_recent().unwrap_or_default();
       let p = PathBuf::from(path);
@@ -150,6 +159,7 @@ pub fn remove_recent(path: &str) -> Result<RecentStore, String> {
       Ok(store)
 }
 
+/// Set the `unsaved` flag on the recent entry matching `path`.
 pub fn set_recent_unsaved(path: &str, unsaved: bool) -> Result<RecentStore, String> {
       let mut store = load_recent().unwrap_or_default();
       for e in store.entries.iter_mut() {
@@ -164,6 +174,8 @@ pub fn set_recent_unsaved(path: &str, unsaved: bool) -> Result<RecentStore, Stri
 
 // ── Project I/O (spec §11, §14) ────────────────────────────────────────────
 
+/// Validate then atomically write a project to `path`, and touch the recent
+/// list. Refuses to persist a project that fails validation.
 pub fn save_project(path: &str, project: &Project) -> Result<(), String> {
       // Validate before writing so we never persist an invalid kit.
       let v = validate(project);
@@ -183,6 +195,9 @@ pub fn save_project(path: &str, project: &Project) -> Result<(), String> {
       Ok(())
 }
 
+/// Read, migrate, and resolve a project from `path`, best-effort re-linking
+/// missing samples and updating the recent list. Errors on unreadable or
+/// unparseable JSON, or an unsupported project format/version.
 pub fn open_project(path: &str) -> Result<Project, String> {
        let raw = fs::read_to_string(path).map_err(|e| format!("open: {e}"))?;
       let mut project: Project = migrate(serde_json::from_str(&raw).map_err(|e| format!("parse JSON: {e}"))?)
@@ -369,12 +384,14 @@ pub fn relink_sample(
       Ok(())
 }
 
+/// Validate a project against its device profile (no I/O).
 pub fn validate_project(project: &Project) -> ValidationResult {
        validate(project)
 }
 
 // ── Compile / Export (spec §12, §13) ───────────────────────────────────────
 
+/// Compile a project to a `.stk` file at `output_path` (see [`compile::compile`]).
 pub fn compile_to_stk(project: &Project, output_path: &str, mono: bool, overwrite: bool) -> Result<CompileReport, String> {
        let opts = CompileOptions {
         output_path: output_path.to_string(),
@@ -384,20 +401,28 @@ pub fn compile_to_stk(project: &Project, output_path: &str, mono: bool, overwrit
       compile::compile(project, &opts)
 }
 
+/// Options for an SD-card export (spec §13).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportOptions {
+     /// Root directory to export into (the SD card mount point).
      pub base_dir: String,
+     /// Export profile: `"hardware"` (device files only) or `"full"`.
      pub profile: String, // "hardware" | "full"
+     /// Copy source WAVs alongside the kit (full profile only).
      #[serde(default)]
      pub copy_samples: bool
 }
 
+/// Result of an SD-card export.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportReport {
+     /// Root directory that was exported into.
      pub base_dir: String,
+     /// Absolute paths of every file written.
      pub paths: Vec<String>,
+     /// Human-readable note about what the device does and does not read.
      pub note: String
 }
 
@@ -409,59 +434,14 @@ pub fn export_sd(project: &Project, opts: ExportOptions) -> Result<ExportReport,
       let prof = crate::profile::known_profile(&project.device.profile, &project.device.firmware)?;
       let mut out_paths = Vec::new();
 
-       // 1) build STK into a temp, then copy into the hardware kit folder.
-      let tmp_stk = base.join("tmp_compile").join(format!("{}.stk", sanitize(&project.kit.name)));
-      fs::create_dir_all(tmp_stk.parent().unwrap()).map_err(|e| e.to_string())?;
-      let report = compile::compile(project, &CompileOptions {
-        output_path: tmp_stk.to_string_lossy().into_owned(),
-        mono: true,
-        overwrite: true
-        })
-      .map_err(|e| format!("STK compile failed: {e}"))?;
+      let (tmp_stk, report) = export_compile_temp_stk(project, &base)?;
 
       let hardware = opts.profile != "full";
-      for folder in if hardware { prof.sd_hardware_folders() } else { prof.sd_root_folders() } {
-        let dest = base.join(&folder);
-        fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
-         let dest_stk = dest.join(format!("{}.stk", sanitize(&project.kit.name)));
-        fs::copy(&tmp_stk, &dest_stk).map_err(|e| e.to_string())?;
-        out_paths.push(dest_stk.to_string_lossy().into_owned());
-          }
+      export_copy_stk_into_folders(project, prof.as_ref(), &base, &tmp_stk, hardware, &mut out_paths)?;
 
-      if opts.profile == "full" {
-        // include WAVs (per the hardware layout root)
-        let samples_dir = base.join(prof.sd_root_folders().get(1).cloned().unwrap_or("SmplTrek/Pool/Audio/Drum".into()));
-        fs::create_dir_all(&samples_dir).map_err(|e| e.to_string())?;
-         for pad in prof.active_pads() {
-          if let Some(s) = project.kit.pads.get(&(pad as u8)) {
-            if s.file_name.is_empty() { continue; }
-            let src = s.resolved_path.as_ref().map(PathBuf::from)
-              .or_else(|| Some(std::path::PathBuf::from(&s.original_path)));
-            if let Some(src) = src {
-              if src.exists() {
-                let dest = samples_dir.join(s.file_name.clone());
-                // Only copy if not already there (avoid overwrite of a real file).
-                if !dest.exists() {
-                  fs::copy(&src, &dest).ok();
-                    }
-                out_paths.push(dest.to_string_lossy().into_owned());
-                  }
-              }
-            }
-          }
-
-         // include project JSON + README
-         let projects_dir = base.join("projects");
-        fs::create_dir_all(&projects_dir).map_err(|e| e.to_string())?;
-        let json = projects_dir.join(format!("{}.json", sanitize(&project.kit.name)));
-        fs::write(&json, serde_json::to_string_pretty(project).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-        out_paths.push(json.to_string_lossy().into_owned());
-
-         let readme = base.join("README.txt");
-        let body = readme_text(project, &report);
-        fs::write(&readme, body).map_err(|e| e.to_string())?;
-        out_paths.push(readme.to_string_lossy().into_owned());
-          }
+      if !hardware {
+        export_full_extras(project, prof.as_ref(), &base, &report, &mut out_paths)?;
+      }
 
       // cleanup temp
       let _ = fs::remove_dir_all(base.join("tmp_compile"));
@@ -475,6 +455,90 @@ pub fn export_sd(project: &Project, opts: ExportOptions) -> Result<ExportReport,
             "Full export includes project JSON files (not read by the device).".into()
           }
        })
+}
+
+/// Compile the kit into a scratch `.stk` under `base/tmp_compile/` (always mono,
+/// overwrite). Returns the temp path and the compile report for reuse.
+fn export_compile_temp_stk(
+      project: &Project,
+      base: &Path,
+) -> Result<(PathBuf, CompileReport), String> {
+      let tmp_stk = base.join("tmp_compile").join(format!("{}.stk", crate::stk_format::sanitize_kit_filename(&project.kit.name)));
+      fs::create_dir_all(tmp_stk.parent().unwrap()).map_err(|e| e.to_string())?;
+      let report = compile::compile(project, &CompileOptions {
+        output_path: tmp_stk.to_string_lossy().into_owned(),
+        mono: true,
+        overwrite: true
+        })
+      .map_err(|e| format!("STK compile failed: {e}"))?;
+      Ok((tmp_stk, report))
+}
+
+/// Copy the compiled `.stk` into each destination kit folder (hardware or full
+/// root layout, per `hardware`), appending every written path to `out_paths`.
+fn export_copy_stk_into_folders(
+      project: &Project,
+      prof: &dyn crate::profile::DeviceProfile,
+      base: &Path,
+      tmp_stk: &Path,
+      hardware: bool,
+      out_paths: &mut Vec<String>,
+) -> Result<(), String> {
+      for folder in if hardware { prof.sd_hardware_folders() } else { prof.sd_root_folders() } {
+        let dest = base.join(&folder);
+        fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+         let dest_stk = dest.join(format!("{}.stk", crate::stk_format::sanitize_kit_filename(&project.kit.name)));
+        fs::copy(tmp_stk, &dest_stk).map_err(|e| e.to_string())?;
+        out_paths.push(dest_stk.to_string_lossy().into_owned());
+          }
+      Ok(())
+}
+
+/// Write the full-profile extras that the hardware profile omits: source WAVs
+/// under the pool root, the project JSON companion, and a README. Appends every
+/// written path to `out_paths`.
+fn export_full_extras(
+      project: &Project,
+      prof: &dyn crate::profile::DeviceProfile,
+      base: &Path,
+      report: &CompileReport,
+      out_paths: &mut Vec<String>,
+) -> Result<(), String> {
+        // include WAVs (per the hardware layout root)
+        let samples_dir = base.join(prof.sd_root_folders().get(1).cloned().unwrap_or("SmplTrek/Pool/Audio/Drum".into()));
+        fs::create_dir_all(&samples_dir).map_err(|e| e.to_string())?;
+         for pad in prof.active_pads() {
+          if let Some(s) = project.kit.pads.get(&(pad as u8)) {
+            if s.file_name.is_empty() { continue; }
+            let src = s.resolved_path.as_ref().map(PathBuf::from)
+              .or_else(|| Some(std::path::PathBuf::from(&s.original_path)));
+            if let Some(src) = src {
+              if src.exists() {
+                let dest = samples_dir.join(s.file_name.clone());
+                // Only copy if not already there (avoid overwrite of a real file).
+                if !dest.exists() {
+                  fs::copy(&src, &dest).map_err(|e| {
+                    format!("copy sample '{}' -> '{}': {e}", src.display(), dest.display())
+                  })?;
+                    }
+                out_paths.push(dest.to_string_lossy().into_owned());
+                  }
+              }
+            }
+          }
+
+         // include project JSON + README
+         let projects_dir = base.join("projects");
+        fs::create_dir_all(&projects_dir).map_err(|e| e.to_string())?;
+        let json = projects_dir.join(format!("{}.json", crate::stk_format::sanitize_kit_filename(&project.kit.name)));
+        fs::write(&json, serde_json::to_string_pretty(project).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        out_paths.push(json.to_string_lossy().into_owned());
+
+         let readme = base.join("README.txt");
+        let body = readme_text(project, report);
+        fs::write(&readme, body).map_err(|e| e.to_string())?;
+        out_paths.push(readme.to_string_lossy().into_owned());
+      Ok(())
 }
 
 fn readme_text(project: &Project, report: &CompileReport) -> String {
@@ -501,31 +565,10 @@ are NOT read by the SmplTrek itself.
       )
 }
 
-fn sanitize(name: &str) -> String {
-	let mut safe = String::new();
-	for character in name.chars() {
-		let character = if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
-			character
-		} else {
-			'-'
-		};
-		if character != '-' || !safe.ends_with('-') {
-			safe.push(character);
-		}
-	}
-	let safe = safe.trim_matches(['-', '_']).to_string();
-	if safe.is_empty()
-		|| matches!(safe.to_ascii_uppercase().as_str(), "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "COM2" | "COM3" | "COM4" | "COM5" | "COM6" | "COM7" | "COM8" | "COM9" | "LPT1" | "LPT2" | "LPT3" | "LPT4" | "LPT5" | "LPT6" | "LPT7" | "LPT8" | "LPT9")
-	{
-		"kit".into()
-	} else {
-		safe
-	}
-}
-
 #[cfg(test)]
 #[test]
 fn sanitize_export_name_is_cross_platform_safe() {
+	use crate::stk_format::sanitize_kit_filename as sanitize;
 	assert_eq!(sanitize("Main: Kit/2"), "Main-Kit-2");
 	assert_eq!(sanitize("../CON"), "kit");
 }
@@ -551,19 +594,31 @@ pub fn list_wavs(dir: &str) -> Result<Vec<AudioFile>, String> {
       Ok(out)
 }
 
+/// A WAV file described for the picker, with device-compatibility flags.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct AudioFile {
+      /// File name (with extension).
       pub name: String,
+      /// Absolute path.
       pub path: String,
+      /// Extension without the dot.
       pub ext: String,
+      /// File size in bytes.
       pub size: u64,
+      /// Duration in milliseconds (0 if unreadable).
       pub duration_ms: u64,
+      /// Sample rate in Hz.
       pub sample_rate: u32,
+      /// Channel count.
       pub channels: u16,
+      /// Bit depth.
       pub bits: u16,
+      /// True when already 48 kHz / 16-bit (no conversion needed on compile).
       pub compatible: bool,
+      /// Optional human-readable compatibility warning.
       pub warning: Option<String>,
+      /// Last-modified time as Unix seconds, if available.
       #[serde(default)]
       pub modified: Option<u64>
 }
@@ -612,6 +667,7 @@ f.compatible = (info.sample_rate == 48000) && (info.bits == 16);
       f
 }
 
+/// Describe a single WAV file (metadata + compatibility). Errors if missing.
 pub fn audio_meta(path: &str) -> Result<AudioFile, String> {
        let p = PathBuf::from(path);
       if !p.exists() {
@@ -622,18 +678,12 @@ pub fn audio_meta(path: &str) -> Result<AudioFile, String> {
 
 /// SHA-256 of a file for stamp/fingerprinting.
 pub fn sha256_file(path: &Path) -> Result<String, String> {
-       use sha2::{Digest, Sha256};
-      let data = fs::read(path).map_err(|e| e.to_string())?;
-      let mut hasher = Sha256::new();
-      hasher.update(&data);
-      let mut hex = String::new();
-      for b in hasher.finalize() {
-        use std::fmt::Write;
-        let _ = write!(hex, "{:02x}", b);
-         }
-      Ok(hex)
+       let data = fs::read(path).map_err(|e| e.to_string())?;
+      Ok(crate::stk_format::sha256_hex(&data))
 }
 
+/// Resolve `p` to an absolute path, joining it onto the current directory when
+/// relative. Does not canonicalize or touch the filesystem.
 pub fn normalize_path(p: &str) -> Result<PathBuf, String> {
        let pb = PathBuf::from(p);
       if pb.is_absolute() {
@@ -643,6 +693,7 @@ pub fn normalize_path(p: &str) -> Result<PathBuf, String> {
          }
 }
 
+/// Current working directory, falling back to `"."` if it cannot be read.
 pub fn cwd() -> PathBuf {
        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
@@ -653,7 +704,7 @@ mod tests {
 	use crate::models::Project;
 
 	#[test]
-	fn prefs_path_uses_stk_editor_namespace() {
+	fn prefs_path_uses_stk_forge_namespace() {
 		let path = prefs_path().expect("local data directory should be available");
 		assert!(path.ends_with(std::path::Path::new("stk-forge").join("recent.json")));
 	}

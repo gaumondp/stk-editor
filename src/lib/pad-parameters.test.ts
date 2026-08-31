@@ -1,16 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import {
-	PAD_PARAMETERS,
-	parsePadParameter,
-	clampPadParameter,
-	type PadParameter
-} from './pad-parameters';
+import { PAD_PARAMETERS, parsePadParameter, clampPadParameter, type PadParameter } from './pad-parameters';
 
 describe('PAD_PARAMETERS metadata', () => {
 	it('describes exactly the four mixer parameters', () => {
-		expect(Object.keys(PAD_PARAMETERS).sort()).toEqual(
-			['fx_send', 'pan', 'pitch', 'volume'].sort()
-		);
+		expect(Object.keys(PAD_PARAMETERS).sort()).toEqual(['fx_send', 'pan', 'pitch', 'volume'].sort());
 	});
 
 	it('carries the documented ranges', () => {

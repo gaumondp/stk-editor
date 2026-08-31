@@ -2,6 +2,7 @@
 
 <script lang="ts">
 	import { focusTrap } from '../lib/focusTrap';
+	import { dismissable } from '../lib/dismissable';
 	import { tr } from '../lib/i18n';
 
 	const { open = false, onClose = () => {} } = $props<{ open: boolean; onClose: () => void }>();
@@ -19,17 +20,13 @@
 		['Preview / stop', 'Space'],
 		['Toggle view', 'Cmd/Ctrl+Shift+F'],
 		['Help / shortcuts', 'F1'],
-		['Cancel / close', 'Escape'],
+		['Cancel / close', 'Escape']
 	];
 
 	function handleBackdropClick(event: MouseEvent) {
 		if ((event.target as HTMLElement).classList.contains('backdrop')) {
 			onClose();
 		}
-	}
-
-	function handleModalClick(event: MouseEvent) {
-		event.stopPropagation();
 	}
 
 	async function copyAsMarkdown() {
@@ -42,8 +39,16 @@
 </script>
 
 {#if open}
-	<div class="backdrop" role="dialog" aria-modal="true" tabindex="-1" onclick={handleBackdropClick}>
-		<div class="modal" use:focusTrap onclick={handleModalClick}>
+	<div class="backdrop" role="presentation" onclick={handleBackdropClick}>
+		<div
+			class="modal"
+			role="dialog"
+			aria-modal="true"
+			aria-label={tr('help.shortcuts')}
+			tabindex="-1"
+			use:focusTrap
+			use:dismissable={onClose}
+		>
 			<h2>{tr('help.shortcuts')}</h2>
 			<ul class="shortcuts">
 				{#each rows as [label, keys]}
@@ -62,7 +67,7 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0,0,0,.6);
+		background: rgba(0, 0, 0, 0.6);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -75,7 +80,7 @@
 		padding: 20px;
 		min-width: 380px;
 		max-width: 540px;
-		box-shadow: 0 8px 32px rgba(0,0,0,.5);
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 	}
 	.shortcuts {
 		list-style: none;
@@ -96,7 +101,12 @@
 		font-family: monospace;
 		font-size: 12px;
 	}
-	.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+	.actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+		margin-top: 16px;
+	}
 	.btn {
 		background: var(--accent, #d2a83f);
 		color: #1a1d21;
@@ -105,5 +115,9 @@
 		border-radius: 4px;
 		cursor: pointer;
 	}
-	.btn.secondary { background: var(--bg-3, #2e3338); color: var(--fg, #e6e6e6); border: 1px solid var(--line, #3a3f45); }
+	.btn.secondary {
+		background: var(--bg-3, #2e3338);
+		color: var(--fg, #e6e6e6);
+		border: 1px solid var(--line, #3a3f45);
+	}
 </style>

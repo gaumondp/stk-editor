@@ -59,7 +59,7 @@ test.describe('Critical paths (S17)', () => {
 		await startNewKit(page);
 		await page.getByRole('button', { name: 'Choose folder…' }).click();
 		const source = page.locator('.file-row', { hasText: 'kick.wav' });
-		const target = page.locator('.assignment-target[aria-label="Pad 1"]');
+		const target = page.locator('.assignment-target[data-pad="1"]');
 		const pad = page.locator('svg [data-pad="1"]');
 		await expect(source).toBeVisible();
 		const sourceBounds = await source.boundingBox();
@@ -113,7 +113,7 @@ test.describe('Critical paths (S17)', () => {
 
 	test('7. Save reports a native dialog error instead of failing silently', async ({ page }) => {
 		await page.addInitScript(() => {
-			localStorage.setItem('locale', 'en');
+			localStorage.setItem('stk-forge.locale', 'en');
 			Object.defineProperty(window, '__TAURI_INTERNALS__', {
 				value: {
 					metadata: { currentWindow: { label: 'main' } },
@@ -135,7 +135,7 @@ test.describe('Critical paths (S17)', () => {
 
 	test('8. Save sends Rust-compatible sample fields after choosing a path', async ({ page }) => {
 		await page.addInitScript(() => {
-			localStorage.setItem('locale', 'en');
+			localStorage.setItem('stk-forge.locale', 'en');
 			Object.defineProperty(window, '__saveProjectPath', { writable: true, value: null });
 			Object.defineProperty(window, '__saveProjectPayload', { writable: true, value: null });
 			Object.defineProperty(window, '__TAURI_INTERNALS__', {
@@ -169,7 +169,7 @@ test.describe('Critical paths (S17)', () => {
 		await page.getByRole('button', { name: 'New kit' }).click();
 		await page.getByRole('button', { name: 'Choose folder…' }).click();
 		const source = page.locator('.file-row', { hasText: 'kick.wav' });
-		const target = page.locator('.assignment-target[aria-label="Pad 1"]');
+		const target = page.locator('.assignment-target[data-pad="1"]');
 		const sourceBounds = await source.boundingBox();
 		const targetBounds = await target.boundingBox();
 		expect(sourceBounds).not.toBeNull();
@@ -191,7 +191,7 @@ test.describe('Critical paths (S17)', () => {
 
 
 test('9. Close kit asks before discarding changes and returns to welcome', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	await chooseMenuItem(page, 'Kit', 'Close kit');
 	await expect(page.getByRole('alertdialog')).toBeVisible();
@@ -206,7 +206,7 @@ test('9. Close kit asks before discarding changes and returns to welcome', async
 
 test('10. Close kit stays open when saving is cancelled', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -232,7 +232,7 @@ test('10. Close kit stays open when saving is cancelled', async ({ page }) => {
 
 test('11. Open asks before replacing a modified kit', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -261,7 +261,7 @@ test('11. Open asks before replacing a modified kit', async ({ page }) => {
 
 test('12. Compile reports a preflight failure instead of failing silently', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -284,7 +284,7 @@ test('12. Compile reports a preflight failure instead of failing silently', asyn
 
 
 test('13. Compact menus replace the separate file-operation buttons', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	await expect(page.getByRole('button', { name: 'Kit', exact: true })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Export' })).toBeVisible();
@@ -293,7 +293,7 @@ test('13. Compact menus replace the separate file-operation buttons', async ({ p
 });
 
 test('14. Kit Information edits the kit name and notes outside the side panel', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	await page.getByRole('button', { name: 'Kit', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Kit Information…' }).click();
@@ -306,7 +306,7 @@ test('14. Kit Information edits the kit name and notes outside the side panel', 
 });
 
 test('15. Open Compiled Kit opens a read-only inspection workflow', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	await page.getByRole('button', { name: 'Kit', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Open Compiled Kit…' }).click();
@@ -315,11 +315,11 @@ test('15. Open Compiled Kit opens a read-only inspection workflow', async ({ pag
 });
 
 test('16. About is available from the header Help menu and exposes diagnostics', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	await page.getByRole('button', { name: 'Help' }).click();
-	await expect(page.getByRole('option', { name: 'README', exact: true })).toHaveCount(0);
-	await page.getByRole('option', { name: 'About', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'README', exact: true })).toHaveCount(0);
+	await page.getByRole('button', { name: 'About', exact: true }).click();
 	const dialog = page.getByRole('dialog', { name: 'About STK Forge' });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole('button', { name: 'Copy diagnostic information' })).toBeVisible();
@@ -330,8 +330,49 @@ test('16. About is available from the header Help menu and exposes diagnostics',
 });
 
 
+test('16b. Escape closes a plain dialog without touching the kit', async ({ page }) => {
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
+	await startNewKit(page);
+	await page.getByRole('button', { name: 'Help' }).click();
+	await page.getByRole('button', { name: 'About', exact: true }).click();
+	await expect(page.getByRole('dialog', { name: 'About STK Forge' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog', { name: 'About STK Forge' })).toHaveCount(0);
+	// The kit is still open and untouched.
+	await expect(page.locator('.assignment-target')).toHaveCount(15);
+});
+
+
+test('16c. Escape on the unsaved-changes guard cancels and never discards the kit', async ({ page }) => {
+	// Guards a data-loss path: Escape is the conventional "get me out of here"
+	// key, so on a save / discard / cancel prompt it must map to cancel.
+	await page.addInitScript(() => {
+		localStorage.setItem('stk-forge.locale', 'en');
+		Object.defineProperty(window, '__TAURI_INTERNALS__', {
+			value: {
+				metadata: { currentWindow: { label: 'main' } },
+				transformCallback: () => 1,
+				unregisterCallback: () => {},
+				invoke: async (command: string) => {
+					if (command === 'cmd_load_recent') return { entries: [] };
+					return undefined;
+				}
+			}
+		});
+	});
+	await startNewKit(page);
+	await chooseMenuItem(page, 'Kit', 'Close kit');
+	await expect(page.getByRole('alertdialog')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('alertdialog')).toHaveCount(0);
+	// Cancelled, not discarded: the kit must still be open.
+	await expect(page.locator('.assignment-target')).toHaveCount(15);
+	await expect(page.getByRole('heading', { name: 'STK Forge' })).toHaveCount(0);
+});
+
+
 test('17. Click-away closes an open compact menu', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	await page.getByRole('button', { name: 'Kit', exact: true }).click();
 	await expect(page.getByRole('menu', { name: 'Kit' })).toBeVisible();
@@ -342,7 +383,7 @@ test('17. Click-away closes an open compact menu', async ({ page }) => {
 
 test('18. Welcome omits compatibility notices and lists five recent projects below its actions', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -390,20 +431,35 @@ test('18. Welcome omits compatibility notices and lists five recent projects bel
 
 
 test('19. Header uses the 64px graphical logo beside one gold product title', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	const logo = page.getByTestId('brand-logo');
 	await expect(logo).toBeVisible();
-	await expect(logo.locator('svg')).toHaveAttribute('viewBox', '0 0 1024 1024');
+	// The brand mark is a static image, not an inline SVG: Tauri's CSP blocks
+	// Vite-inlined data URIs, so the logo is served from public/assets.
+	await expect(logo).toHaveAttribute('src', '/assets/stk-forge-logo.png');
 	const box = await logo.boundingBox();
 	expect(box?.width).toBe(64);
 	await expect(page.locator('.brand-name')).toHaveText('STK Forge');
 });
 
 
+test('19b. Interface starts in English when no language was ever chosen', async ({ page }) => {
+	// No locale is seeded and no system language is consulted: the documented
+	// default must hold even on a French or Japanese host.
+	await page.addInitScript(() => {
+		Object.defineProperty(navigator, 'language', { get: () => 'fr-CA' });
+		Object.defineProperty(navigator, 'languages', { get: () => ['fr-CA', 'fr'] });
+	});
+	await page.goto('/');
+	await expect(page.locator('.status-pill')).toHaveText('Saved');
+	await expect(page.getByRole('button', { name: 'Help' })).toBeVisible();
+});
+
+
 test('20. Kit holds five recent kits while the header owns help and French status text', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'fr');
+		localStorage.setItem('stk-forge.locale', 'fr');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -443,7 +499,7 @@ test('20. Kit holds five recent kits while the header owns help and French statu
 
 test('21. Audio Explorer exposes the shared WAV preview volume control', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -471,7 +527,7 @@ test('21. Audio Explorer exposes the shared WAV preview volume control', async (
 
 test('22. Pad controls and theme toggle are localized and visible', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.theme', 'dark');
 	});
 	await startNewKit(page);
@@ -486,7 +542,7 @@ test('22. Pad controls and theme toggle are localized and visible', async ({ pag
 
 
 test('22a. Suggested drum positions are visible, localized, and hideable', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	const suggestions = page.getByTestId('suggested-pad-positions');
 	const toggle = page.getByRole('button', { name: 'Hide suggested drum position' });
@@ -515,7 +571,7 @@ test('22a. Suggested drum positions are visible, localized, and hideable', async
 
 test('22b. Assigned pad rows always support move and swap by drag', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -564,7 +620,7 @@ test('22b. Assigned pad rows always support move and swap by drag', async ({ pag
 
 test('23. Persistent UI scale replaces the obsolete view selector', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '100');
 	});
 	await startNewKit(page);
@@ -591,7 +647,7 @@ test('23. Persistent UI scale replaces the obsolete view selector', async ({ pag
 
 
 test('24. Physical pads show subtle associated numbers', async ({ page }) => {
-	await page.addInitScript(() => localStorage.setItem('locale', 'en'));
+	await page.addInitScript(() => localStorage.setItem('stk-forge.locale', 'en'));
 	await startNewKit(page);
 	const numbers = page.locator('.pads-svg .pad-number');
 	await expect(numbers).toHaveCount(15);
@@ -606,7 +662,7 @@ test('24. Physical pads show subtle associated numbers', async ({ page }) => {
 
 test('25. Physical pad text is non-selectable and double-click keeps WAV preview', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: () => Promise.resolve() });
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
@@ -636,7 +692,7 @@ test('25. Physical pad text is non-selectable and double-click keeps WAV preview
 	await expect(number).toHaveCSS('pointer-events', 'none');
 
 	const source = page.locator('.file-row', { hasText: 'kick.wav' });
-	const target = page.locator('.assignment-target[aria-label="Pad 1"]');
+	const target = page.locator('.assignment-target[data-pad="1"]');
 	const sourceBounds = await source.boundingBox();
 	const targetBounds = await target.boundingBox();
 	expect(sourceBounds).not.toBeNull();
@@ -650,7 +706,7 @@ test('25. Physical pad text is non-selectable and double-click keeps WAV preview
 });
 test('26. Pad assignments remain top-aligned at 200% scale', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '100');
 	});
 	await startNewKit(page);
@@ -666,7 +722,7 @@ test('26. Pad assignments remain top-aligned at 200% scale', async ({ page }) =>
 
 test('27. Empty Audio Explorer does not create vertical overflow', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '100');
 	});
 	await startNewKit(page);
@@ -698,7 +754,7 @@ test('27. Empty Audio Explorer does not create vertical overflow', async ({ page
 
 test('28. WAV list columns are configurable and Explorer width persists', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -755,7 +811,7 @@ test('28. WAV list columns are configurable and Explorer width persists', async 
 
 test('29. Audio Explorer restores its saved visual width at 200% scale', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '200');
 		localStorage.removeItem('stk-forge.audio-explorer.width');
 		localStorage.setItem('stk-forge.audio-explorer.visual-width.v2', '960');
@@ -767,7 +823,7 @@ test('29. Audio Explorer restores its saved visual width at 200% scale', async (
 
 test('30. Enlarged workspace starts with the pad facade reachable from the left', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '200');
 	});
 	await startNewKit(page);
@@ -783,7 +839,7 @@ test('30. Enlarged workspace starts with the pad facade reachable from the left'
 
 test('31. Enlarged workspace anchors its oversized stage at the left edge', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '200');
 	});
 	await startNewKit(page);
@@ -798,7 +854,7 @@ test('31. Enlarged workspace anchors its oversized stage at the left edge', asyn
 
 test('32. CSS zoom fallback keeps the app root within the viewport width', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		localStorage.setItem('stk-forge.ui-scale', '200');
 	});
 	await startNewKit(page);
@@ -812,7 +868,7 @@ test('32. CSS zoom fallback keeps the app root within the viewport width', async
 
 test('33. Quit menu exits the native application after the guard succeeds', async ({ page }) => {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__appExitRequested', { writable: true, value: false });
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
@@ -848,7 +904,7 @@ test('33. Quit menu exits the native application after the guard succeeds', asyn
  */
 async function mockTauriWithWavFolder(page: Page): Promise<void> {
 	await page.addInitScript(() => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },
@@ -885,7 +941,7 @@ test('Pad parameter editor stays disabled until an assigned pad is selected and 
 	// Assign kick.wav to Pad 1 through the existing WAV-folder mouse-drag flow.
 	await page.getByRole('button', { name: 'Choose folder…' }).click();
 	const source = page.locator('.file-row', { hasText: 'kick.wav' });
-	const targetRow = page.locator('.assignment-target[aria-label="Pad 1"]');
+	const targetRow = page.locator('.assignment-target[data-pad="1"]');
 	const sourceBounds = await source.boundingBox();
 	const targetBounds = await targetRow.boundingBox();
 	expect(sourceBounds).not.toBeNull();
@@ -928,7 +984,7 @@ test('Pad parameter editor drag cancels when selection changes and never writes 
 	// Assign two distinct WAVs so each pad's volume is observable independently.
 	const drag = async (fileName: string, padId: number) => {
 		const source = page.locator('.file-row', { hasText: fileName });
-		const target = page.locator(`.assignment-target[aria-label="Pad ${padId}"]`);
+		const target = page.locator(`.assignment-target[data-pad="${padId}"]`);
 		const sourceBox = await source.boundingBox();
 		const targetBox = await target.boundingBox();
 		expect(sourceBox).not.toBeNull();
@@ -945,7 +1001,7 @@ test('Pad parameter editor drag cancels when selection changes and never writes 
 	const volumeKnob = page.getByTestId('pad-knob-volume');
 
 	// Select Pad 1; both pads start at the default volume of 100.
-	await page.locator('.assignment-target[aria-label="Pad 1"]').click();
+	await page.locator('.assignment-target[data-pad="1"]').click();
 	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
 
 	// Begin a genuine pointer drag on the volume knob and move DOWN, which
@@ -989,7 +1045,7 @@ test('Pad parameter editor drag cancels when selection changes and never writes 
 async function assignAndSelectPadOne(page: Page): Promise<void> {
 	await page.getByRole('button', { name: 'Choose folder…' }).click();
 	const source = page.locator('.file-row', { hasText: 'kick.wav' });
-	const targetRow = page.locator('.assignment-target[aria-label="Pad 1"]');
+	const targetRow = page.locator('.assignment-target[data-pad="1"]');
 	const sourceBounds = await source.boundingBox();
 	const targetBounds = await targetRow.boundingBox();
 	expect(sourceBounds).not.toBeNull();
@@ -1230,7 +1286,7 @@ const INVALID_SD_REPORT = {
  */
 async function mockTauriWithReport(page: Page, report: object): Promise<void> {
 	await page.addInitScript((sdReport) => {
-		localStorage.setItem('locale', 'en');
+		localStorage.setItem('stk-forge.locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
 			value: {
 				metadata: { currentWindow: { label: 'main' } },

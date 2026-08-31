@@ -6,14 +6,21 @@
 
 use std::path::Path;
 
+use crate::stk_format::{read_le_u16, read_le_u32};
+
 const TARGET_RATE: u32 = 48000;
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioInfo {
+     /// Sample rate in Hz, as declared in the WAV `fmt ` chunk.
      pub sample_rate: u32,
+      /// Channel count (1 = mono, 2 = stereo, ...).
       pub channels: u16,
+       /// Bit depth per sample (8/16/24/32 PCM, or 32/64 IEEE float).
        pub bits: u16,
+        /// Number of sample frames (samples per channel).
         pub frames: u64,
+         /// Playback duration in milliseconds, derived from frames / sample_rate.
          pub duration_ms: u64
 }
 
@@ -26,13 +33,6 @@ enum SampleKind {
 struct Parsed {
      spec: AudioInfo,
       samples: Vec<f32>, // interleaved, normalized to [-1, 1]
-}
-
-fn read_le_u32(b: &[u8]) -> u32 {
-      u32::from_le_bytes([b[0], b[1], b[2], b[3]])
-}
-fn read_le_u16(b: &[u8]) -> u16 {
-      u16::from_le_bytes([b[0], b[1]])
 }
 
 /// Parse a full WAV into header info + normalized interleaved f32 samples.
@@ -51,24 +51,33 @@ fn parse_wav(bytes: &[u8]) -> Result<Parsed, String> {
 
        while i + 8 <= bytes.len() {
        let id = &bytes[i..i + 4];
-        let size = read_le_u32(&bytes[i + 4..i + 8]) as usize;
+        // Chunk size comes straight from the file; a hostile value must never
+        // index past the buffer. read_le_u32 is bounds-checked, and the range
+        // is validated with get() before any body slice is taken.
+        let size = match read_le_u32(bytes, i + 4) {
+          Some(s) => s as usize,
+          None => break,
+        };
         let body_start = i + 8;
-        if body_start + size > bytes.len() {
-          break;
-          }
-        let body = &bytes[body_start..body_start + size];
+        let body = match body_start
+          .checked_add(size)
+          .and_then(|end| bytes.get(body_start..end))
+        {
+          Some(b) => b,
+          None => break,
+        };
 
        match id {
         b"fmt " => {
-          let audio_format = if body.len() >= 2 { read_le_u16(body) } else { 1 };
-          if body.len() >= 4 {
-           channels = read_le_u16(&body[2..4]);
+          let audio_format = read_le_u16(body, 0).unwrap_or(1);
+          if let Some(v) = read_le_u16(body, 2) {
+           channels = v;
             }
-          if body.len() >= 8 {
-           sample_rate = read_le_u32(&body[4..8]);
+          if let Some(v) = read_le_u32(body, 4) {
+           sample_rate = v;
             }
-          if body.len() >= 16 {
-           bits = read_le_u16(&body[14..16]);
+          if let Some(v) = read_le_u16(body, 14) {
+           bits = v;
              }
           kind = if audio_format == 3 { SampleKind::Float } else { SampleKind::Pcm };
           }
@@ -78,7 +87,11 @@ fn parse_wav(bytes: &[u8]) -> Result<Parsed, String> {
             }
         _ => {} // skip LIST, cue, fact, etc.
           }
-        i += 8 + size + (size & 1); // chunks are word-aligned
+        // chunks are word-aligned; stop rather than wrap on overflow
+        i = match i.checked_add(8 + size + (size & 1)) {
+          Some(next) => next,
+          None => break,
+        };
         }
 
       if !found_data {
@@ -115,8 +128,13 @@ fn decode(data: &[u8], bits: u16, kind: SampleKind) -> Result<Vec<f32>, String> 
       let total = data.len() / bytes_per;
       let mut out = Vec::with_capacity(total);
       for k in 0..total {
-        let b = &data[k * bytes_per..k * bytes_per + bytes_per];
-        out.push(decode_one(b, bits, kind));
+        // take() is the shared bounds-checked slice: total is derived from
+        // data.len()/bytes_per so every range is valid, but routing through it
+        // means a future miscalculation degrades to skipping, never a panic.
+        match crate::stk_format::take(data, k * bytes_per, bytes_per) {
+          Some(b) => out.push(decode_one(b, bits, kind)),
+          None => break,
+        }
        }
       Ok(out)
 }
@@ -225,6 +243,11 @@ pub fn normalize(path: &Path, mono: bool) -> Result<(Vec<i16>, AudioInfo), Strin
 /// Mix N channels down/up to `target_ch` channels (each is a per-frame buffer).
 fn mix(per_channel: &[Vec<f32>], target_ch: u64) -> Vec<Vec<f32>> {
       let n = per_channel.len();
+      // An empty data chunk yields zero channels; return empty target buffers
+      // instead of indexing per_channel[0] and panicking.
+      if n == 0 {
+        return (0..target_ch).map(|_| Vec::new()).collect();
+      }
       let mut out: Vec<Vec<f32>> = (0..target_ch)
             .map(|_| Vec::with_capacity(per_channel[0].len()))
             .collect();
@@ -247,6 +270,9 @@ fn mix(per_channel: &[Vec<f32>], target_ch: u64) -> Vec<Vec<f32>> {
 }
 
 fn downmix(per_channel: &[Vec<f32>]) -> Vec<f32> {
+      if per_channel.is_empty() {
+        return Vec::new();
+      }
       let frames = per_channel[0].len();
       let mut out = Vec::with_capacity(frames);
       for i in 0..frames {
@@ -326,6 +352,46 @@ mod tests {
 	#[test]
 	fn parse_wav_rejects_non_riff() {
 		assert!(parse_wav(b"NOTAWAV").is_err());
+	}
+
+	#[test]
+	fn parse_wav_truncated_does_not_panic() {
+		// A RIFF/WAVE header that declares a fmt chunk far larger than the
+		// bytes actually present. Must return Err (no data chunk), not panic.
+		let mut w = Vec::new();
+		w.extend_from_slice(b"RIFF");
+		w.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes()); // absurd RIFF size
+		w.extend_from_slice(b"WAVE");
+		w.extend_from_slice(b"fmt ");
+		w.extend_from_slice(&0xFFFF_FFFFu32.to_le_bytes()); // absurd chunk size
+		w.extend_from_slice(&[1, 0, 1, 0]); // only 4 bytes of the claimed body
+		let res = parse_wav(&w);
+		assert!(res.is_err(), "truncated WAV must error, not panic");
+	}
+
+	#[test]
+	fn parse_wav_zero_length_data_chunk() {
+		// Valid header + fmt + a data chunk of size 0. Yields zero frames and
+		// must not panic in decode/mix/downmix.
+		let mut w = Vec::new();
+		w.extend_from_slice(b"RIFF");
+		w.extend_from_slice(&36u32.to_le_bytes());
+		w.extend_from_slice(b"WAVE");
+		w.extend_from_slice(b"fmt ");
+		w.extend_from_slice(&16u32.to_le_bytes());
+		w.extend_from_slice(&1u16.to_le_bytes()); // PCM
+		w.extend_from_slice(&1u16.to_le_bytes()); // mono
+		w.extend_from_slice(&48000u32.to_le_bytes());
+		w.extend_from_slice(&96000u32.to_le_bytes());
+		w.extend_from_slice(&2u16.to_le_bytes());
+		w.extend_from_slice(&16u16.to_le_bytes());
+		w.extend_from_slice(b"data");
+		w.extend_from_slice(&0u32.to_le_bytes()); // empty data
+		let parsed = parse_wav(&w).expect("empty data chunk should parse");
+		assert!(parsed.samples.is_empty(), "no samples from empty data");
+		// mix/downmix over the empty channel set must not panic.
+		assert_eq!(mix(&[], 1).len(), 1);
+		assert!(downmix(&[]).is_empty());
 	}
 
 	#[test]

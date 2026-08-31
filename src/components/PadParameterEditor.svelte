@@ -373,10 +373,7 @@
 		background: var(--bg);
 		border: 2px solid var(--line);
 		/* Knurled outer rim, drawn with a conic gradient of thin ridges. */
-		background-image: repeating-conic-gradient(
-			var(--line) 0deg 4deg,
-			transparent 4deg 8deg
-		);
+		background-image: repeating-conic-gradient(var(--line) 0deg 4deg, transparent 4deg 8deg);
 		transform: rotate(var(--ppe-angle, 0deg));
 		transition: transform 60ms linear;
 	}

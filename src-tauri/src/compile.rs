@@ -10,13 +10,18 @@ use crate::wav;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+/// Options controlling a `.stk` compile.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompileOptions {
+     /// Destination path for the compiled `.stk` file.
      pub output_path: String,
+     /// Compile samples to mono (true) or stereo (false).
      pub mono: bool,
+     /// Overwrite `output_path` if it already exists.
      pub overwrite: bool
 }
 impl CompileOptions {
+     /// Build options for `output_path` with the safe defaults: mono, no overwrite.
      pub fn new(output_path: &str) -> Self {
        Self {
          output_path: output_path.to_string(),
@@ -26,23 +31,33 @@ impl CompileOptions {
       }
 }
 
+/// Outcome of a successful compile.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CompileReport {
+     /// Path the `.stk` was written to.
      pub output_path: String,
+     /// Size of the written file in bytes.
      pub bytes: u64,
+     /// Number of pads that carried a real sample.
      pub pads_filled: usize,
+     /// Non-blocking warnings gathered during validation.
      pub warnings: Vec<String>
 }
 
+/// Result of validating a project: blocking errors and non-blocking warnings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ValidationResult {
+     /// Blocking problems that prevent compiling/saving.
      pub errors: Vec<String>,
+     /// Advisory issues that do not block.
      pub warnings: Vec<String>
 }
 impl ValidationResult {
+     /// True when there are no blocking errors.
      pub fn is_ok(&self) -> bool {
        self.errors.is_empty()
       }
+     /// True when at least one blocking error is present (compile must refuse).
      pub fn blocking(&self) -> bool {
        !self.errors.is_empty()
       }
@@ -62,7 +77,13 @@ pub fn validate(project: &Project) -> ValidationResult {
       r
 }
 
-#[allow(clippy::too_many_arguments)]
+/// Compile a validated project into a `.stk` archive on disk.
+///
+/// Validates the project, builds one device WAV per active pad (real samples
+/// normalized to 48 kHz/16-bit, empty pads synthesized as silence), assembles
+/// the header + KTDT + audio section, and writes it atomically via a temp file.
+/// Returns a [`CompileReport`]; errors on validation failure, an existing
+/// output when `overwrite` is false, a missing source sample, or any I/O error.
 pub fn compile(project: &Project, opts: &CompileOptions) -> Result<CompileReport, String> {
       let prof = known_profile(&project.device.profile, &project.device.firmware)?;
 
@@ -120,12 +141,11 @@ for pad in prof.active_pads() {
 
 // ---------------------------------------------------------------------------
 
-const MAGIC: &[u8; 4] = b"VDK0";
-const HEADER_FILE_SIZE_ADJUSTMENT: usize = 360;
-const KTDT_TAG: &[u8; 4] = b"KTDT";
-const KTDT_SIZE: usize = 0x1084; // 4228
-const ENTRY_SIZE: usize = 280;
-const PATH_FIELD: usize = 256;
+const MAGIC: &[u8; 4] = crate::stk_format::VDK0_MAGIC;
+use crate::stk_format::{
+	FIRST_ISDT_OFFSET, GLOBAL_VOLUME_OFFSET, HEADER_FILE_SIZE_ADJUSTMENT, KTDT_SIZE, KTDT_TAG,
+	ENTRY_SIZE, PATH_FIELD,
+};
 const ISDT_SIZE_ADJUSTMENT: usize = 10;
 
 /// Standard device chunks inserted before `data` (file_format §5).
@@ -180,15 +200,15 @@ fn build_stk(
         set_param(&mut ktdt, off + PATH_FIELD, &sample);
         }
 
-// footer @4200 : 8 zero + 0x64 (global volume) @+8
-        if let Some(slice) = ktdt.get_mut(4208..4212) {
+// footer @GLOBAL_VOLUME_OFFSET : 8 zero + 0x64 (global volume)
+        if let Some(slice) = ktdt.get_mut(GLOBAL_VOLUME_OFFSET..GLOBAL_VOLUME_OFFSET + 4) {
             slice.copy_from_slice(&[0x64, 0, 0, 0]);
         }
 
 
-       // first ISDT @4212 (index 0)
+       // first ISDT @FIRST_ISDT_OFFSET (index 0)
       let first = &wavs[0].0;
-      write_isdt(&mut ktdt, 4212, 0, first.len());
+      write_isdt(&mut ktdt, FIRST_ISDT_OFFSET, 0, first.len());
 
       out.extend_from_slice(&ktdt);
 
@@ -292,6 +312,9 @@ pub fn build_wav(pcm: &[i16], channels: u16) -> Vec<u8> {
       w.extend_from_slice(b"data");
       w.extend(&le32(data_bytes));
       for s in pcm {
+        // Bit-preserving cast: PCM samples are written as their raw 16-bit
+        // two's-complement pattern; `as u16` reinterprets the bits, it does not
+        // clamp or convert the value.
         w.extend(&le16(*s as u16));
        }
       w

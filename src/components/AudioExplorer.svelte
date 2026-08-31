@@ -6,6 +6,8 @@
 	import { tr, formatDuration, formatDate } from '../lib/i18n';
 	import { notify } from '../stores/notify';
 	import { previewingPath, previewVolume, previewWav, setPreviewVolume, stopPreview } from '../lib/audio-preview';
+	import { readMigratedStorage } from '../lib/local-storage';
+	import { startPointerDrag, CLICK_SUPPRESSION_MS } from '../lib/pointer-drag';
 
 	type OptionalColumn = 'size' | 'duration' | 'date';
 
@@ -14,6 +16,8 @@
 	const MAX_PANEL_WIDTH = 640;
 	const COLUMNS_STORAGE_KEY = 'stk-forge.audio-explorer.columns';
 	const WIDTH_STORAGE_KEY = 'stk-forge.audio-explorer.visual-width.v2';
+	const RECENT_DIRS_STORAGE_KEY = 'stk-forge.audio-explorer.recent-dirs';
+	const LAST_DIR_STORAGE_KEY = 'stk-forge.audio-explorer.last-dir';
 
 	let files = $state<AudioFile[]>([]);
 	let dir = $state<string | null>(null);
@@ -28,13 +32,17 @@
 	let suppressPreviewUntil = 0;
 	let dragPreview = $state<{ name: string; x: number; y: number } | null>(null);
 
-	const fileGridTemplate = $derived([
-		'minmax(0, 1fr)',
-		visibleColumns.size ? 'minmax(54px, auto)' : '',
-		visibleColumns.duration ? 'minmax(54px, auto)' : '',
-		visibleColumns.date ? 'minmax(76px, auto)' : '',
-		'10px',
-	].filter(Boolean).join(' '));
+	const fileGridTemplate = $derived(
+		[
+			'minmax(0, 1fr)',
+			visibleColumns.size ? 'minmax(54px, auto)' : '',
+			visibleColumns.duration ? 'minmax(54px, auto)' : '',
+			visibleColumns.date ? 'minmax(76px, auto)' : '',
+			'10px'
+		]
+			.filter(Boolean)
+			.join(' ')
+	);
 
 	const filtered = $derived(
 		files
@@ -44,14 +52,14 @@
 				if (sortBy === 'duration') return b.durationMs - a.durationMs;
 				if (sortBy === 'date') return (b.modified ?? 0) - (a.modified ?? 0);
 				return a.name.localeCompare(b.name);
-			}),
+			})
 	);
 
 	onMount(() => {
 		try {
-			const stored = JSON.parse(localStorage.getItem('recentAudioDirs') ?? '[]');
+			const stored = JSON.parse(readMigratedStorage(RECENT_DIRS_STORAGE_KEY, 'recentAudioDirs') ?? '[]');
 			if (Array.isArray(stored)) recentDirs = stored.slice(0, 5);
-			const last = localStorage.getItem('lastAudioDir');
+			const last = readMigratedStorage(LAST_DIR_STORAGE_KEY, 'lastAudioDir');
 			if (last) dir = last;
 			const savedColumns = JSON.parse(localStorage.getItem(COLUMNS_STORAGE_KEY) ?? '{}');
 			if (savedColumns && typeof savedColumns === 'object') {
@@ -86,13 +94,17 @@
 
 	/** Writes the current Explorer width in 100%-scale pixels after a completed adjustment. */
 	function persistPanelWidth(): void {
-		try { localStorage.setItem(WIDTH_STORAGE_KEY, String(Math.round(panelWidth * uiScaleFactor()))); } catch {}
+		try {
+			localStorage.setItem(WIDTH_STORAGE_KEY, String(Math.round(panelWidth * uiScaleFactor())));
+		} catch {}
 	}
 
 	/** Updates one optional column preference while keeping the Name column permanently visible. */
 	function setColumnVisible(column: OptionalColumn, visible: boolean): void {
 		visibleColumns[column] = visible;
-		try { localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(visibleColumns)); } catch {}
+		try {
+			localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(visibleColumns));
+		} catch {}
 	}
 
 	/** Begins an Explorer width drag from the panel's left resize handle. */
@@ -131,17 +143,19 @@
 		if (!out) return;
 		dir = out as string;
 		try {
-			localStorage.setItem('lastAudioDir', dir);
+			localStorage.setItem(LAST_DIR_STORAGE_KEY, dir);
 			const updated = [dir, ...recentDirs.filter((d) => d !== dir)].slice(0, 5);
 			recentDirs = updated;
-			localStorage.setItem('recentAudioDirs', JSON.stringify(updated));
+			localStorage.setItem(RECENT_DIRS_STORAGE_KEY, JSON.stringify(updated));
 		} catch {}
 		await load();
 	}
 
 	function selectRecent(newDir: string) {
 		dir = newDir;
-		try { localStorage.setItem('lastAudioDir', dir); } catch {}
+		try {
+			localStorage.setItem(LAST_DIR_STORAGE_KEY, dir);
+		} catch {}
 		void load();
 	}
 
@@ -159,42 +173,36 @@
 		if (event.button !== 0) return;
 		event.preventDefault();
 		activeMouseDragCleanup?.();
-		const startX = event.clientX;
-		const startY = event.clientY;
-		let active = false;
-		const cleanup = () => {
+		const session = startPointerDrag(event, {
+			onMove: (moveEvent) => {
+				dragPreview = { name: file.name, x: moveEvent.clientX, y: moveEvent.clientY };
+				window.dispatchEvent(
+					new CustomEvent('smpltrek-audio-drag-move', {
+						detail: { path: file.path, clientX: moveEvent.clientX, clientY: moveEvent.clientY }
+					})
+				);
+			},
+			onEnd: (upEvent) => {
+				dragPreview = null;
+				activeMouseDragCleanup = null;
+				suppressPreviewUntil = performance.now() + CLICK_SUPPRESSION_MS;
+				window.dispatchEvent(
+					new CustomEvent('smpltrek-audio-drag-end', {
+						detail: { path: file.path, clientX: upEvent.clientX, clientY: upEvent.clientY }
+					})
+				);
+			},
+			onCancel: () => {
+				dragPreview = null;
+				activeMouseDragCleanup = null;
+				window.dispatchEvent(new CustomEvent('smpltrek-audio-drag-cancel'));
+			}
+		});
+		activeMouseDragCleanup = () => {
 			dragPreview = null;
-			window.removeEventListener('mousemove', onMouseMove, true);
-			window.removeEventListener('mouseup', onMouseUp, true);
-			window.removeEventListener('blur', onWindowBlur);
+			session.cancel();
 			activeMouseDragCleanup = null;
 		};
-		const onMouseMove = (moveEvent: MouseEvent) => {
-			if (!active && Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) < 6) return;
-			active = true;
-			dragPreview = { name: file.name, x: moveEvent.clientX, y: moveEvent.clientY };
-			moveEvent.preventDefault();
-			window.dispatchEvent(new CustomEvent('smpltrek-audio-drag-move', {
-				detail: { path: file.path, clientX: moveEvent.clientX, clientY: moveEvent.clientY }
-			}));
-		};
-		const onMouseUp = (upEvent: MouseEvent) => {
-			cleanup();
-			if (!active) return;
-			upEvent.preventDefault();
-			suppressPreviewUntil = performance.now() + 250;
-			window.dispatchEvent(new CustomEvent('smpltrek-audio-drag-end', {
-				detail: { path: file.path, clientX: upEvent.clientX, clientY: upEvent.clientY }
-			}));
-		};
-		const onWindowBlur = () => {
-			cleanup();
-			if (active) window.dispatchEvent(new CustomEvent('smpltrek-audio-drag-cancel'));
-		};
-		activeMouseDragCleanup = cleanup;
-		window.addEventListener('mousemove', onMouseMove, true);
-		window.addEventListener('mouseup', onMouseUp, true);
-		window.addEventListener('blur', onWindowBlur);
 	}
 
 	/** Preserves click-to-preview while ignoring the synthetic click after a drag. */
@@ -238,31 +246,49 @@
 		type="button"
 		aria-label={tr('explorer.resize')}
 		onpointerdown={handleResizePointerDown}
-		onkeydown={handleResizeKeyDown}></button>
+		onkeydown={handleResizeKeyDown}
+	></button>
 	<h3>{tr('explorer.title')}</h3>
 	<div class="body">
 		<div class="toolbar">
 			<button class="btn" type="button" onclick={chooseDir}>{tr('explorer.select_dir')}</button>
-			<button class="btn" type="button" onclick={load} disabled={!dir} title="Refresh">↻</button>
+			<button class="btn" type="button" onclick={load} disabled={!dir} title={tr('explorer.refresh')}>↻</button>
 		</div>
 		<div class="preview-controls">
-			<button class="btn preview-stop" type="button" onclick={stopPreview} disabled={!$previewingPath} aria-label={tr('explorer.stop')}>■</button>
+			<button
+				class="btn preview-stop"
+				type="button"
+				onclick={stopPreview}
+				disabled={!$previewingPath}
+				aria-label={tr('explorer.stop')}>■</button
+			>
 			<span class="preview-name" title={$previewingPath ?? ''}>{previewFileName($previewingPath)}</span>
 			<label class="preview-volume">
 				<span>{tr('explorer.volume')}</span>
-				<input aria-label={tr('explorer.preview_volume')} type="range" min="0" max="100" value={Math.round($previewVolume * 100)} oninput={(event) => setPreviewVolume(Number((event.target as HTMLInputElement).value) / 100)} />
+				<input
+					aria-label={tr('explorer.preview_volume')}
+					type="range"
+					min="0"
+					max="100"
+					value={Math.round($previewVolume * 100)}
+					oninput={(event) => setPreviewVolume(Number((event.target as HTMLInputElement).value) / 100)}
+				/>
 			</label>
 		</div>
 		{#if recentDirs.length}
-			<select class="recent-select" onchange={(e) => selectRecent((e.target as HTMLSelectElement).value)} value={dir ?? ''}>
-				<option value="" disabled>Recent folders…</option>
+			<select
+				class="recent-select"
+				onchange={(e) => selectRecent((e.target as HTMLSelectElement).value)}
+				value={dir ?? ''}
+			>
+				<option value="" disabled>{tr('explorer.recent_folders')}</option>
 				{#each recentDirs as r}
 					<option value={r}>{r}</option>
 				{/each}
 			</select>
 		{/if}
 		{#if dir}
-			<div class="dir" title={dir}>{dir} • {files.length} files</div>
+			<div class="dir" title={dir}>{dir} • {tr('explorer.files_count', { count: files.length })}</div>
 		{/if}
 
 		<input type="search" placeholder={tr('explorer.search')} bind:value={query} />
@@ -278,15 +304,36 @@
 				</select>
 			</label>
 			<label class="check">
-				<input type="checkbox" bind:checked={recursive} disabled title="Recursive scan — backend flat only (V1.1)" />
-				Recursive
+				<input type="checkbox" bind:checked={recursive} disabled title={tr('explorer.recursive_hint')} />
+				{tr('explorer.recursive')}
 			</label>
 		</div>
 		<fieldset class="column-controls">
 			<legend>{tr('explorer.columns')}</legend>
-			<label><input type="checkbox" checked={visibleColumns.size} onchange={(event) => setColumnVisible('size', (event.target as HTMLInputElement).checked)} /> {tr('explorer.show_size')}</label>
-			<label><input type="checkbox" checked={visibleColumns.duration} onchange={(event) => setColumnVisible('duration', (event.target as HTMLInputElement).checked)} /> {tr('explorer.show_duration')}</label>
-			<label><input type="checkbox" checked={visibleColumns.date} onchange={(event) => setColumnVisible('date', (event.target as HTMLInputElement).checked)} /> {tr('explorer.show_date')}</label>
+			<label
+				><input
+					type="checkbox"
+					checked={visibleColumns.size}
+					onchange={(event) => setColumnVisible('size', (event.target as HTMLInputElement).checked)}
+				/>
+				{tr('explorer.show_size')}</label
+			>
+			<label
+				><input
+					type="checkbox"
+					checked={visibleColumns.duration}
+					onchange={(event) => setColumnVisible('duration', (event.target as HTMLInputElement).checked)}
+				/>
+				{tr('explorer.show_duration')}</label
+			>
+			<label
+				><input
+					type="checkbox"
+					checked={visibleColumns.date}
+					onchange={(event) => setColumnVisible('date', (event.target as HTMLInputElement).checked)}
+				/>
+				{tr('explorer.show_date')}</label
+			>
 		</fieldset>
 
 		<div class="file-list" role="table">
@@ -305,18 +352,22 @@
 					onmousedown={(event) => handleMouseDown(event, f)}
 					ondblclick={() => preview(f)}
 					onclick={() => handleFileClick(f)}
-					title={`${f.path}\n${f.compatible ? 'compatible' : f.warning ?? ''}\n${f.modified ? fmtDate(f.modified) : ''}`}
+					title={`${f.path}\n${f.compatible ? 'compatible' : (f.warning ?? '')}\n${f.modified ? fmtDate(f.modified) : ''}`}
 					tabindex="0"
-					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') preview(f); }}>
+					onkeydown={(e) => {
+						if (e.key === 'Enter' || e.key === ' ') preview(f);
+					}}
+				>
 					<span class="name" role="cell">{f.name}</span>
 					{#if visibleColumns.size}<span class="meta" role="cell">{fmtSize(f.size)}</span>{/if}
 					{#if visibleColumns.duration}<span class="meta" role="cell">{fmtDuration(f.durationMs)}</span>{/if}
 					{#if visibleColumns.date}<span class="meta" role="cell">{fmtDate(f.modified)}</span>{/if}
-					<span class="dot {f.compatible ? 'ok' : 'warn'}" title={f.warning ?? ''} aria-label={tr('explorer.play')}></span>
+					<span class="dot {f.compatible ? 'ok' : 'warn'}" title={f.warning ?? ''} aria-label={tr('explorer.play')}
+					></span>
 				</div>
 			{/each}
 			{#if !files.length}
-				<div class="empty">… {dir ? 'no WAV found' : 'select a folder'}</div>
+				<div class="empty">… {dir ? tr('explorer.no_wav_found') : tr('explorer.select_folder')}</div>
 			{/if}
 		</div>
 	</div>
@@ -380,7 +431,10 @@
 		outline: none;
 	}
 	.resize-handle:hover,
-	.resize-handle:focus-visible { background: var(--accent-2, #4a90d2); opacity: 0.7; }
+	.resize-handle:focus-visible {
+		background: var(--accent-2, #4a90d2);
+		opacity: 0.7;
+	}
 
 	h3 {
 		margin: 0;
@@ -401,7 +455,10 @@
 		overflow: hidden;
 	}
 
-	.toolbar { display: flex; gap: 6px; }
+	.toolbar {
+		display: flex;
+		gap: 6px;
+	}
 	.preview-controls {
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr) auto;
@@ -413,36 +470,183 @@
 		border-radius: 5px;
 		background: var(--bg, #1a1d21);
 	}
-	.preview-stop { min-width: 28px; padding-inline: 6px; }
-	.preview-name { overflow: hidden; color: var(--fg-dim, #9aa0a6); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-	.preview-volume { display: flex; align-items: center; gap: 5px; color: var(--fg-dim, #9aa0a6); font-size: 10px; }
-	.preview-volume input { width: 88px; accent-color: var(--accent-2, #4a90d2); }
-	.dir { font-size: 11px; color: var(--fg-dim, #9aa0a6); margin: 6px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.recent-select { width: 100%; margin: 6px 0; padding: 4px 6px; background: var(--bg, #1a1d21); color: var(--fg, #e6e6e6); border: 1px solid var(--line, #3a3f45); border-radius: 4px; font-size: 11px; }
-	.controls-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 8px 0 4px; }
-	.sort { display: flex; align-items: center; gap: 6px; font-size: 11px; flex: 1; }
-	.check { display: flex; align-items: center; gap: 4px; font-size: 11px; opacity: 0.7; }
-	.column-controls { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 6px; padding: 4px 0; border: 0; color: var(--fg-dim, #9aa0a6); font-size: 10px; }
-	.column-controls legend { padding: 0; color: var(--fg-dim, #9aa0a6); }
-	.column-controls label { display: flex; align-items: center; gap: 3px; }
+	.preview-stop {
+		min-width: 28px;
+		padding-inline: 6px;
+	}
+	.preview-name {
+		overflow: hidden;
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 11px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.preview-volume {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 10px;
+	}
+	.preview-volume input {
+		width: 88px;
+		accent-color: var(--accent-2, #4a90d2);
+	}
+	.dir {
+		font-size: 11px;
+		color: var(--fg-dim, #9aa0a6);
+		margin: 6px 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.recent-select {
+		width: 100%;
+		margin: 6px 0;
+		padding: 4px 6px;
+		background: var(--bg, #1a1d21);
+		color: var(--fg, #e6e6e6);
+		border: 1px solid var(--line, #3a3f45);
+		border-radius: 4px;
+		font-size: 11px;
+	}
+	.controls-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 8px;
+		margin: 8px 0 4px;
+	}
+	.sort {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 11px;
+		flex: 1;
+	}
+	.check {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		font-size: 11px;
+		opacity: 0.7;
+	}
+	.column-controls {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 8px;
+		margin: 0 0 6px;
+		padding: 4px 0;
+		border: 0;
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 10px;
+	}
+	.column-controls legend {
+		padding: 0;
+		color: var(--fg-dim, #9aa0a6);
+	}
+	.column-controls label {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+	}
 
-	.file-list { margin: 6px 0 0; flex: 1; min-height: 0; overflow-x: auto; overflow-y: auto; }
+	.file-list {
+		margin: 6px 0 0;
+		flex: 1;
+		min-height: 0;
+		overflow-x: auto;
+		overflow-y: auto;
+	}
 	.file-header,
-	.file-row { display: grid; align-items: center; column-gap: 6px; min-width: max-content; }
-	.file-header { position: sticky; top: 0; z-index: 1; padding: 3px 6px; background: var(--bg-2, #23272b); border-bottom: 1px solid var(--line, #3a3f45); color: var(--fg-dim, #9aa0a6); font-size: 10px; text-transform: uppercase; }
-	.file-row { padding: 4px 6px; border-radius: 4px; cursor: grab; background: none; border: none; text-align: left; user-select: none; -webkit-user-select: none; outline: none; }
+	.file-row {
+		display: grid;
+		align-items: center;
+		column-gap: 6px;
+		min-width: max-content;
+	}
+	.file-header {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		padding: 3px 6px;
+		background: var(--bg-2, #23272b);
+		border-bottom: 1px solid var(--line, #3a3f45);
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 10px;
+		text-transform: uppercase;
+	}
+	.file-row {
+		padding: 4px 6px;
+		border-radius: 4px;
+		cursor: grab;
+		background: none;
+		border: none;
+		text-align: left;
+		user-select: none;
+		-webkit-user-select: none;
+		outline: none;
+	}
 	.file-row:hover,
-	.file-row:focus-visible { background: var(--bg-3, #2e3338); }
-	.file-row.playing { background: rgba(74,144,210,0.15); outline: 1px solid var(--accent-2, #4a90d2); }
-	.file-row.missing { background: rgba(231, 76, 60, 0.08); }
-	.file-row.missing .name { text-decoration: line-through; text-decoration-thickness: 2px; }
-	.name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.meta { color: var(--fg-dim, #9aa0a6); font-size: 10px; white-space: nowrap; }
-	.dot { width: 10px; height: 10px; border-radius: 50%; border: none; flex-shrink: 0; }
-	.dot.ok { background: var(--ok, #4caf50); }
-	.dot.warn { background: var(--warn, #f0ad4e); }
-	.empty { padding: 8px 6px; color: var(--fg-dim, #9aa0a6); }
-	input[type='search'] { width: 100%; padding: 5px 8px; background: var(--bg, #1a1d21); color: var(--fg, #e6e6e6); border: 1px solid var(--line, #3a3f45); border-radius: 4px; }
-	.btn { background: var(--bg-3, #2e3338); color: var(--fg, #e6e6e6); border: 1px solid var(--line, #3a3f45); border-radius: 4px; padding: 4px 8px; cursor: pointer; }
-	.btn:disabled { opacity: 0.5; cursor: default; }
+	.file-row:focus-visible {
+		background: var(--bg-3, #2e3338);
+	}
+	.file-row.playing {
+		background: rgba(74, 144, 210, 0.15);
+		outline: 1px solid var(--accent-2, #4a90d2);
+	}
+	.file-row.missing {
+		background: rgba(231, 76, 60, 0.08);
+	}
+	.file-row.missing .name {
+		text-decoration: line-through;
+		text-decoration-thickness: 2px;
+	}
+	.name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.meta {
+		color: var(--fg-dim, #9aa0a6);
+		font-size: 10px;
+		white-space: nowrap;
+	}
+	.dot {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		border: none;
+		flex-shrink: 0;
+	}
+	.dot.ok {
+		background: var(--ok, #4caf50);
+	}
+	.dot.warn {
+		background: var(--warn, #f0ad4e);
+	}
+	.empty {
+		padding: 8px 6px;
+		color: var(--fg-dim, #9aa0a6);
+	}
+	input[type='search'] {
+		width: 100%;
+		padding: 5px 8px;
+		background: var(--bg, #1a1d21);
+		color: var(--fg, #e6e6e6);
+		border: 1px solid var(--line, #3a3f45);
+		border-radius: 4px;
+	}
+	.btn {
+		background: var(--bg-3, #2e3338);
+		color: var(--fg, #e6e6e6);
+		border: 1px solid var(--line, #3a3f45);
+		border-radius: 4px;
+		padding: 4px 8px;
+		cursor: pointer;
+	}
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
 </style>

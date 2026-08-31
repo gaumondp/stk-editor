@@ -6,9 +6,12 @@ use std::collections::BTreeMap;
 
 /// Canonical project identifier written into JSON files.
 pub const PROJECT_FORMAT: &str = "smpltrek-kit-project";
+/// Current on-disk project schema version (bumped when the JSON shape changes).
 pub const PROJECT_FORMAT_VERSION: u32 = 1;
+/// Application version, taken from the crate version at build time.
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Target device identity: which profile and firmware a project is built for.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Device {
       #[serde(default = "default_profile")]
@@ -18,6 +21,7 @@ pub struct Device {
 }
 
 impl Device {
+     /// The only device supported in V1: SmplTrek, firmware 3.2.
      pub fn smpltrek_3_2() -> Self {
       Self {
        profile: "smpltrek".to_string(),
@@ -120,6 +124,7 @@ impl AudioMeta {
      }
 }
 
+/// A kit: its name, its pad-to-sample map, and free-form notes.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Kit {
      pub name: String,
@@ -129,6 +134,7 @@ pub struct Kit {
      pub notes: String
 }
 
+/// Record of the most recent compile of a project (for UI display).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CompileInfo {
      #[serde(default)]
@@ -139,6 +145,7 @@ pub struct CompileInfo {
      pub target: Option<String>
 }
 
+/// Per-project export/compile preferences.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectPrefs {
      #[serde(default)]
@@ -153,6 +160,8 @@ impl ProjectPrefs {
      }
 }
 
+/// The canonical working project: format/version stamps, target device, kit,
+/// last-compile info and preferences. This is the JSON persisted on disk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
      pub format: String,
@@ -167,8 +176,11 @@ pub struct Project {
      pub prefs: ProjectPrefs
 }
 
+/// Default project schema version for serde-defaulted fields.
 pub fn default_fv() -> u32 { PROJECT_FORMAT_VERSION }
+/// Default device profile id.
 pub fn default_profile() -> String { "smpltrek".to_string() }
+/// Default device firmware.
 pub fn default_firmware() -> String { "3.2".to_string() }
 
 impl CompileInfo {
@@ -180,6 +192,7 @@ impl CompileInfo {
 }
 
 impl Project {
+     /// Create an empty project named `name`, targeting SmplTrek fw 3.2.
      pub fn new(name: &str) -> Self {
       Self {
        format: PROJECT_FORMAT.to_string(),
@@ -224,6 +237,8 @@ pub struct DeviceProfileInfo {
 }
 
 impl DeviceProfileInfo {
+     /// Build the frontend-facing profile info from a [`DeviceProfile`],
+     /// resolving path fields for `kit_title`.
      pub fn from_profile(profile: &dyn crate::profile::DeviceProfile, kit_title: &str) -> Self {
       Self {
         id: profile.id().to_string(),

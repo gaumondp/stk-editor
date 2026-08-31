@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "svelte-check --tsconfig ./tsconfig.json",
+    "format": "prettier --write \"src/**/*.{ts,svelte}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,svelte}\"",
     "i18n:extract": "node scripts/i18n-extract.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
