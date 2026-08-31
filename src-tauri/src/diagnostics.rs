@@ -24,6 +24,11 @@ pub struct Diagnostics {
 }
 
 /// Run a command and return trimmed stdout, or `None` on any failure.
+///
+/// Only the macOS probes shell out, so this is gated to that target: compiled
+/// unconditionally it is dead code everywhere else, which fails a
+/// `-D warnings` clippy run on Linux.
+#[cfg(target_os = "macos")]
 fn run(cmd: &str, args: &[&str]) -> Option<String> {
 	let out = std::process::Command::new(cmd).args(args).output().ok()?;
 	if !out.status.success() {
