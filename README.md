@@ -7,7 +7,7 @@
 </p>
 STK Forge creates editable JSON companions, compiles `.stk` kits, inspects compiled kits without changing the original file, and exports a SmplTrek SD-card layout. It runs locally: no cloud account, telemetry, or upload is required.
 
-![Status](https://img.shields.io/badge/status-pre--alpha-orange) ![Tauri](https://img.shields.io/badge/Tauri-2-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-beta-yellow) ![Tauri](https://img.shields.io/badge/Tauri-2-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
 
 ## What it does
@@ -25,6 +25,8 @@ STK Forge creates editable JSON companions, compiles `.stk` kits, inspects compi
 
 ![STK Forge interface showing pad assignments and the Audio Files explorer](docs/screenshot-1.png)
 
+*Shown in the light theme. The same screen in the dark theme is at the [end of this page](#dark-theme) — STK Forge remembers whichever you pick.*
+
 ## Download and install
 
 Ready-to-use builds are published on the **[Releases page](https://github.com/gaumondp/stk-forge/releases)** of this repository. You do not need any developer tools to install them.
@@ -34,7 +36,7 @@ Ready-to-use builds are published on the **[Releases page](https://github.com/ga
 | **Mac** (Apple Silicon or Intel) | the `.dmg` file |
 | **Windows 10 or 11** | the `.exe` installer |
 
-> **No release has been published yet.** The Releases page is empty until the first version is tagged. Until then, the only way to run STK Forge is to [build it from source](#build-from-source), which does require developer tools.
+> **These are beta builds.** They work, but they are early: verify every kit you compile on your own SmplTrek before relying on it. If the Releases page has no files yet, the first version has not been tagged — until then you can [build the app from source](#build-from-source).
 
 ### First launch on a Mac
 
@@ -53,7 +55,7 @@ For the same reason, Windows SmartScreen shows a blue **“Windows protected you
 
 ### Why the warnings
 
-Removing them requires paid code-signing certificates from Apple and a Windows certificate authority. STK Forge is a free, pre-alpha project and does not have them yet. If you would rather not bypass the warnings, you can [build the app yourself from source](#build-from-source) instead — a build you compile on your own machine is not blocked.
+Removing them requires paid code-signing certificates from Apple and a Windows certificate authority. STK Forge is a free, independent beta project and does not have them yet. If you would rather not bypass the warnings, you can [build the app yourself from source](#build-from-source) instead — a build you compile on your own machine is not blocked.
 
 ## Quick start
 
@@ -173,3 +175,9 @@ The field-level container reference is available in [`docs/file_format.md`](docs
 The hardware does not read the JSON file. STK Forge uses a separate JSON companion because the compiled container is an export artifact: it does not reliably preserve the source WAV locations, the user’s kit notes, or every editor-level choice needed for a safe round trip. Keeping the editable data separate also means inspection and extraction never modify an input `.stk` file.
 
 The JSON schema is intentionally still named `smpltrek-kit-project` for backward compatibility with existing editable projects. It records the current device profile, kit parameters, sample references, and notes; STK Forge can then recompile a new `.stk` output at a location chosen by the user. This separation is temporary only in the sense that the format and profiles may evolve: it is currently the safer and more recoverable editing model.
+
+## Dark theme
+
+![The same STK Forge kit shown in the dark theme](docs/screenshot-dark.png)
+
+*The same kit in the dark theme. Switch themes from the sun and moon button in the header; the choice persists between sessions, as do the interface language and the display scale.*

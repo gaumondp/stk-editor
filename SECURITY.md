@@ -22,5 +22,5 @@ input that triggers the problem and the steps to reproduce it.
 
 ## Support status
 
-STK Forge is **pre-alpha**. There is no security-support guarantee, and fixes are
+STK Forge is in **beta**. There is no security-support guarantee, and fixes are
 provided on a best-effort basis.

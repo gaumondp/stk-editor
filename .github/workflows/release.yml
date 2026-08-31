@@ -2,7 +2,7 @@
 # DRAFT GitHub Release. Nothing becomes public until you press Publish.
 #
 # Builds are UNSIGNED on purpose: signing costs an Apple Developer membership
-# and a Windows certificate, and this is a pre-alpha project. The consequence is
+# and a Windows certificate, and this is an independent beta project. The consequence is
 # documented for users in README.md ("Download and install"). To sign later, add
 # the secrets below — the workflow already passes them through, so no rewrite is
 # needed:
@@ -78,9 +78,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v__VERSION__
-          releaseName: STK Forge v__VERSION__
+          releaseName: STK Forge v__VERSION__ Beta
           releaseBody: |
-            Pre-alpha build. Verify every output on the exact SmplTrek hardware
+            Beta build. Verify every output on the exact SmplTrek hardware
             and firmware you intend to use.
 
             **These builds are not code-signed.** macOS and Windows will warn you
