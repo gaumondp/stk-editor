@@ -1,0 +1,134 @@
+# Runs the same gates CONTRIBUTING.md asks a contributor to run locally.
+# Nothing here publishes anything: see release.yml for artifacts and releases.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch cancels the previous, still-running check.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (types, format, unit, e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # setup-node must come AFTER pnpm/action-setup: its pnpm cache resolution
+      # needs pnpm already on PATH.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Types (svelte-check)
+        run: pnpm check
+
+      - name: Formatting
+        run: pnpm format:check
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+
+      # Kept only on failure: the HTML report is what makes a red e2e run
+      # diagnosable without reproducing it locally.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  rust:
+    name: Rust (clippy, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tauri's Linux build needs the system webview even to compile the tests.
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  build:
+    name: Build ${{ matrix.name }}
+    # Only worth the runner time once the cheap gates are green.
+    needs: [frontend, rust]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS (universal)
+            # --bundles app deliberately skips the .dmg here. Building a disk
+            # image runs an AppleScript that positions the icons in the Finder
+            # window, which needs Automation permission and fails with error
+            # -1743 in a restricted session. That step is cosmetic, so this
+            # per-commit gate does not depend on it; release.yml builds the real
+            # .dmg, where a failure is meaningful and must be visible.
+            args: --bundles app --target universal-apple-darwin
+          - os: windows-latest
+            name: Windows
+            # No override: this really does produce the .exe installer, which is
+            # the artifact that cannot be tested on a Mac.
+            args: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: pnpm install --frozen-lockfile
+
+      # Proves both platforms still bundle. The artifacts are not published:
+      # this is the check that would have caught a stale Windows icon.
+      - name: Build application bundle
+        run: pnpm tauri build ${{ matrix.args }}

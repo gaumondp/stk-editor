@@ -1,3 +1,14 @@
+# Builds the downloadable macOS and Windows binaries and attaches them to a
+# DRAFT GitHub Release. Nothing becomes public until you press Publish.
+#
+# Builds are UNSIGNED on purpose: signing costs an Apple Developer membership
+# and a Windows certificate, and this is a pre-alpha project. The consequence is
+# documented for users in README.md ("Download and install"). To sign later, add
+# the secrets below — the workflow already passes them through, so no rewrite is
+# needed:
+#   macOS   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
+#           APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
+#   Windows WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD
 name: Release
 
 on:
@@ -7,111 +18,74 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  release:
+    name: Build ${{ matrix.name }}
+    permissions:
+      # tauri-action creates the release and uploads the binaries.
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: macos-latest
-            target: universal
-            args: --target aarch64-apple-darwin --target x86_64-apple-darwin
+            name: macOS (universal)
+            args: --target universal-apple-darwin
           - os: windows-latest
-            target: x64
+            name: Windows
             args: ''
-
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # setup-node must come AFTER pnpm/action-setup: its pnpm cache resolution
+      # needs pnpm already on PATH.
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          version: 9
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
         with:
-          targets: ${{ matrix.target == 'universal' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          workspaces: './src-tauri -> target'
 
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
+      - run: pnpm install --frozen-lockfile
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Check
+      # A tag must never ship code that fails the gates.
+      - name: Verify before publishing
         run: |
           pnpm check
-          cargo check --manifest-path src-tauri/Cargo.toml
+          pnpm test
+          cargo test --manifest-path src-tauri/Cargo.toml
 
-      - name: Tests (Rust)
-        run: cargo test --manifest-path src-tauri/Cargo.toml
-
-      - name: Audit
-        run: |
-          cargo audit || true
-          pnpm audit || true
-
-      # --- macOS signing (requires secrets) ---
-      - name: Import Apple certificate
-        if: matrix.os == 'macos-latest' && env.APPLE_CERTIFICATE != ''
+      # Builds the bundles, creates the draft release on the first runner to
+      # finish, and attaches this platform's artifacts to it.
+      - uses: tauri-apps/tauri-action@v1
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/cert.p12
-          security create-keychain -p actions build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p actions build.keychain
-          security import /tmp/cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k actions build.keychain
-
-      - name: Build Tauri
-        run: pnpm tauri:build ${{ matrix.args }}
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      # --- Windows signing (requires EV cert thumbprint) ---
-      - name: Sign Windows MSI
-        if: matrix.os == 'windows-latest' && env.WIN_CERT_THUMBPRINT != ''
-        env:
-          WIN_CERT_THUMBPRINT: ${{ secrets.WIN_CERT_THUMBPRINT }}
-        run: |
-          signtool sign /tr http://timestamp.digicert.com /td sha256 /fd sha256 /sha1 $env:WIN_CERT_THUMBPRINT src-tauri/target/release/bundle/msi/*.msi || echo "signtool not available in CI without cert"
-
-      - name: Generate SHA256SUMS
-        run: |
-          shasum -a 256 src-tauri/target/release/bundle/**/*.{dmg,msi,exe} > SHA256SUMS 2>/dev/null || sha256sum src-tauri/target/release/bundle/**/* -t > SHA256SUMS 2>/dev/null || true
-          cat SHA256SUMS || true
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
         with:
-          name: bundle-${{ matrix.os }}
-          path: |
-            src-tauri/target/release/bundle/
-            SHA256SUMS
+          tagName: v__VERSION__
+          releaseName: STK Forge v__VERSION__
+          releaseBody: |
+            Pre-alpha build. Verify every output on the exact SmplTrek hardware
+            and firmware you intend to use.
 
-      - name: Create Draft Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: true
-          generate_release_notes: true
-          files: |
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.msi
-            SHA256SUMS
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            **These builds are not code-signed.** macOS and Windows will warn you
+            the first time you open the app — see "Download and install" in the
+            README for the exact steps.
+          releaseDraft: true
+          prerelease: true
+          args: ${{ matrix.args }}

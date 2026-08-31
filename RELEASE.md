@@ -1,82 +1,134 @@
-# Release Process — SmplTrek Kit Builder
+# Release Process
 
-This document describes how to cut a signed, notarized release (see `specs/s16-packaging.md`).
+The product is **STK Forge**. The Rust crate, the Windows executable name and the
+JSON schema name `smpltrek-kit-project` intentionally keep the legacy
+`smpltrek-kit-builder` identifier for backward compatibility, so those names are
+correct below and are not a stale product name.
 
-## Pre-release checklist
+Releases are built by GitHub Actions, not by hand. See
+[`.github/workflows/release.yml`](.github/workflows/release.yml) and
+`specs/s16-packaging.md`.
 
-```bash
-cargo test --manifest-path src-tauri/Cargo.toml   # 14/14 Rust unit
-pnpm check                                        # svelte-check 0 error
-pnpm build                                        # vite 195kB
-cargo audit && pnpm audit                         # no high severity
-```
+## What is automated
 
-Manual QA on macOS 13+ and Windows 10/11 (clean VM):
+Pushing a `v*` tag runs the release workflow, which for macOS (universal
+`aarch64` + `x86_64`) and Windows:
 
-1. New Kit → drag 3 WAVs → compile → `.STK` loads on SmplTrek fw 3.2
-2. Export *Hardware* → verify `SmplTrek/Pool/Kit/*.stk` only
-3. Export *Full* → verify `SmplTrek/Pool/Audio/Drum/*.wav` + `projects/*.json` + `README.txt` + no overwrite of existing WAV
-4. Missing file: move a WAV → reopen → red path → *Find missing* → relink
-5. Undo/redo, `Cmd+Z`, Delete, Space prelisten, `F1` shortcuts
+1. Re-runs `pnpm check`, `pnpm test` and the Rust test suite — a tag never ships
+   code that fails the gates.
+2. Builds the bundles with `tauri-apps/tauri-action`.
+3. Creates a **draft** GitHub Release marked as a pre-release and attaches the
+   `.dmg` and the `.exe` installer to it.
+
+Nothing becomes public until you open the draft and press **Publish release**.
+
+Ordinary pushes and pull requests are covered separately by
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml), which runs all the
+verification gates and confirms both platforms still build.
+
+## Builds are unsigned
+
+Current builds carry no Apple or Windows code signature. They install and run,
+but both systems warn the user on first launch. The exact steps a user must
+follow are documented in the README's "Download and install" section — keep that
+section accurate if this ever changes.
+
+Signing later requires no workflow rewrite: the release workflow already passes
+the relevant secrets through. Add them under **Settings → Secrets and variables
+→ Actions**:
+
+- macOS: `APPLE_CERTIFICATE` (base64 `.p12`), `APPLE_CERTIFICATE_PASSWORD`,
+  `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
+- Windows: `WINDOWS_CERTIFICATE` (base64 `.pfx`), `WINDOWS_CERTIFICATE_PASSWORD`
+
+`src-tauri/entitlements.plist` already declares the hardened runtime,
+`files.user-selected.read-write` and `device.usb`. Update it only when Tauri or
+macOS requirements change, and re-test on a clean macOS install afterwards.
+
+## Manual QA before tagging
+
+CI cannot test the one thing that matters most: real hardware. Run this on a
+SmplTrek with firmware 3.2 before tagging.
+
+1. New kit → drag 3 WAVs → compile → the `.stk` loads on the device.
+2. Export *Hardware* → verify `SmplTrek/Pool/Kit/*.stk` only.
+3. Export *Full* → verify `SmplTrek/Pool/Audio/Drum/*.wav`, `projects/*.json`,
+   `README.txt`, and that no existing WAV was overwritten.
+4. Move a WAV → reopen the project → red path → **Find missing** → relink.
+5. Undo/redo, `Cmd+Z`, Delete, Space preview, `F1` shortcuts.
+
+Record the outcome in
+[`docs/research/2026-08-28-STK-Sonicware-compatibility.md`](docs/research/2026-08-28-STK-Sonicware-compatibility.md),
+which currently states that no hardware playback run has been verified.
 
 ## Versioning
 
-- Source of truth: `package.json` `version` == `src-tauri/Cargo.toml` `version` == `src-tauri/tauri.conf.json` `version` (injected via `vite.config.ts:import.meta.env.APP_VERSION`)
-- Tag format: `vMAJOR.MINOR.PATCH` (semver)
-- Changelog: `CHANGELOG.md` (generated from conventional commits, `pnpm changelog` when added)
+The version must match in three files, which the workflow reads:
 
-## Tag & push
+- `package.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/tauri.conf.json` (injected into the UI via
+  `vite.config.ts` → `import.meta.env.APP_VERSION`)
+
+Tag format is `vMAJOR.MINOR.PATCH`. User-facing changes belong in
+`CHANGELOG.md`.
+
+## Cutting a release
 
 ```bash
-# bump version in package.json + Cargo.toml + tauri.conf.json
-pnpm version patch|minor|major   # or edit manually
-git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json
-git commit -m "chore(release): v0.1.1"
+# 1. Bump the version in the three files above.
+git checkout -b release/v0.1.1
+git add package.json src-tauri/Cargo.toml src-tauri/tauri.conf.json CHANGELOG.md
+git commit -F .kiro/tmp/commit-msg.txt   # chore - release v0.1.1
+git push origin release/v0.1.1
+```
+
+Open a pull request, let CI pass, and merge it. Then tag the merged commit and
+push only the tag:
+
+```bash
+git checkout main && git pull
 git tag v0.1.1
-git push origin main --tags
+git push origin v0.1.1
 ```
 
-## CI — `.github/workflows/release.yml`
-
-On tag `v*`:
-
-- Matrix `macos-latest` (universal `aarch64+x86_64` via `lipo`) + `windows-latest`
-- `pnpm install --frozen-lockfile` → `cargo check` → `cargo test` → `pnpm tauri:build`
-- **macOS signing** (requires secrets):
-  - `APPLE_CERTIFICATE` (base64 `.p12`) + `APPLE_CERTIFICATE_PASSWORD`
-  - `APPLE_SIGNING_IDENTITY` (`Developer ID Application: …`)
-  - `APPLE_ID` / `APPLE_PASSWORD` / `APPLE_TEAM_ID` for `notarytool submit --wait` + `stapler staple`
-  - `TAURI_SIGNING_PRIVATE_KEY` / `PASSWORD` for updater (V1.1)
-- **Windows signing**:
-  - `WIN_CERT_THUMBPRINT` (EV cert SHA1) → `signtool sign /tr http://timestamp.digicert.com /td sha256`
-- `SHA256SUMS` generated, artifacts uploaded, draft GitHub Release created (auto notes)
-
-Secrets are in GitHub Environment `release` (required reviewers: 1).
-
-## Verify artifacts
-
-```bash
-# macOS
-codesign -vvv --deep --strict SmplTrek\ Kit\ Builder.app
-spctl -a -v SmplTrek\ Kit\ Builder.app
-xcrun stapler validate SmplTrek_Kit_Builder_*.dmg
-
-# Windows
-signtool verify /pa SmplTrek_Kit_Builder_*.msi
-```
-
-Gatekeeper / SmartScreen must pass without warnings.
-
-## Publish
-
-1. Open draft release on GitHub → edit notes → attach `SHA256SUMS`
-2. `Publish release` (or keep draft for internal QA)
-3. Announce + attach `README.txt` note from SD export
+The workflow starts on the tag. When both platform jobs finish, open the draft
+release, check that a `.dmg` and an `.exe` are attached, edit the notes, and
+publish.
 
 ## Hotfix
 
-Branch from tag: `git checkout -b hotfix/v0.1.2 v0.1.1` → fix → bump patch → tag `v0.1.2`.
+Branch from the tag, fix, bump the patch version, then tag again:
 
-## Entitlements
+```bash
+git checkout -b hotfix/v0.1.2 v0.1.1
+```
 
-`src-tauri/entitlements.plist` (hardened runtime, `files.user-selected.read-write`, `device.usb`). Update only when Tauri or macOS requirements change — test on clean macOS VM after change.
+## If a release build fails
+
+Read the first failing step, not the last. The most common causes:
+
+| Symptom | Cause |
+| --- | --- |
+| No `.exe` attached | `bundle.targets` in `tauri.conf.json` lost its `nsis` entry |
+| macOS job fails on target | The `universal-apple-darwin` toolchain targets were not installed |
+| Gate step fails | The tag was cut from a commit that does not pass CI — fix on a branch and re-tag |
+
+## Building a `.dmg` locally
+
+`pnpm tauri build` produces the disk image by running an AppleScript that
+arranges the icons in the Finder window. If your terminal has not been granted
+Automation access to Finder, that step fails with:
+
+```
+execution error: Apple event not authorized (-1743)
+Failed running AppleScript
+```
+
+The build itself is fine — only the cosmetic layout step is blocked. Grant the
+permission under **System Settings → Privacy & Security → Automation**, allowing
+your terminal (or IDE) to control **Finder**, then run the build again. To skip
+the disk image entirely while developing, use `pnpm tauri build --bundles app`.
+
+The release workflow builds the real `.dmg` on a GitHub runner, so this local
+permission is not required to publish.

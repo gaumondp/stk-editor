@@ -25,6 +25,36 @@ STK Forge creates editable JSON companions, compiles `.stk` kits, inspects compi
 
 ![STK Forge interface showing pad assignments and the Audio Files explorer](docs/screenshot-1.png)
 
+## Download and install
+
+Ready-to-use builds are published on the **[Releases page](https://github.com/gaumondp/stk-forge/releases)** of this repository. You do not need any developer tools to install them.
+
+| Your computer | Download this file |
+| --- | --- |
+| **Mac** (Apple Silicon or Intel) | the `.dmg` file |
+| **Windows 10 or 11** | the `.exe` installer |
+
+> **No release has been published yet.** The Releases page is empty until the first version is tagged. Until then, the only way to run STK Forge is to [build it from source](#build-from-source), which does require developer tools.
+
+### First launch on a Mac
+
+STK Forge is **not signed with an Apple certificate**, so macOS will refuse to open it the first time and say it cannot verify the developer. This is expected, and it is a statement about the certificate, not about the app. Here is how to allow it:
+
+1. Open the `.dmg` and drag **STK Forge** into your **Applications** folder.
+2. Double-click **STK Forge**. macOS blocks it and shows a warning — click **Done**.
+3. Open the **Apple menu → System Settings → Privacy & Security**, and scroll down to **Security**.
+4. Click **Open Anyway** next to the message about STK Forge, then enter your password.
+
+That button only appears for about an hour after step 2, so if you miss it, simply double-click the app again to make it reappear. You only do this once: afterwards STK Forge opens normally like any other app.
+
+### First launch on Windows
+
+For the same reason, Windows SmartScreen shows a blue **“Windows protected your PC”** screen. Click **More info**, then **Run anyway**. Again, this is a one-time step.
+
+### Why the warnings
+
+Removing them requires paid code-signing certificates from Apple and a Windows certificate authority. STK Forge is a free, pre-alpha project and does not have them yet. If you would rather not bypass the warnings, you can [build the app yourself from source](#build-from-source) instead — a build you compile on your own machine is not blocked.
+
 ## Quick start
 
 1. Select **New kit** from **Kit**.
@@ -74,7 +104,7 @@ The pad facade shows suggested drum positions beneath the physical pads. Use **H
 
 The STK format is not presented here as a general Sonicware interchange format. The implementation is based on reverse-engineered SmplTrek kit behavior and can be firmware-sensitive. Do not assume a generated file is safe for an untested product or firmware.
 
-The underlying research, sources, and exact claim boundaries are in [`docs/research/2026-08-28-STK-Sonicware-compatibility.md`](docs/research/2026-08-28-STK-Sonicware-compatibility.md).
+The implementation is based on reverse-engineered SmplTrek kit behavior; the exact claim boundaries are as stated in the table above. The evidence behind each tier — what was verified and how, which Sonicware claims remain unvalidated, and what test would resolve each open question — is documented in [`docs/research/2026-08-28-STK-Sonicware-compatibility.md`](docs/research/2026-08-28-STK-Sonicware-compatibility.md).
 
 
 ## Data and safety boundaries
@@ -83,28 +113,6 @@ The underlying research, sources, and exact claim boundaries are in [`docs/resea
 - The current device profile is structurally specific to **SmplTrek firmware 3.2**.
 - Compiling and exporting never overwrite an input `.stk` or WAV file. Overwrite prompts apply only to a selected output destination.
 - A successful compile is not proof of compatibility with untested firmware or hardware. Test on non-critical media before relying on a kit.
-
-## Build from source
-
-Requirements: Node.js 20+, pnpm 9+, Rust stable, and the platform build tools for Tauri.
-
-```bash
-pnpm install
-pnpm check
-pnpm test
-pnpm test:rust
-pnpm test:e2e
-
-# Development
-pnpm tauri:dev
-
-# macOS app bundle
-PATH="$HOME/.cargo/bin:$PATH" pnpm tauri build --bundles app
-
-# Windows portable executable (run this command on Windows)
-pnpm tauri build --no-bundle
-# Output: src-tauri/target/release/smpltrek-kit-builder.exe
-```
 
 ## Attribution
 
@@ -117,6 +125,35 @@ MIT. STK Forge is an independent project and is not affiliated with, endorsed by
 
 ## Technical section
 
+### Build from source
+
+Requirements: Node.js 20+, pnpm 9+, Rust stable, and the platform build tools for Tauri.
+
+```bash
+pnpm install
+
+# Verification gates (the same ones CI runs)
+pnpm check
+pnpm format:check
+pnpm test
+pnpm test:rust
+pnpm test:e2e
+
+# Development
+pnpm tauri:dev
+
+# Installable bundles for the current platform
+# macOS: .app + .dmg   ·   Windows: .exe installer
+pnpm tauri build
+
+# macOS app bundle only, without the disk image
+pnpm tauri build --bundles app
+```
+
+The Rust crate, the Windows executable name and the JSON schema name intentionally keep the legacy `smpltrek-kit-builder` / `smpltrek-kit-project` identifiers for backward compatibility, while the product is STK Forge.
+
+Every push runs these gates on Linux and verifies that macOS and Windows still build, via [`.github/workflows/ci.yml`](.github/workflows/ci.yml). Pushing a `v*` tag builds and attaches the downloadable binaries to a draft release, via [`.github/workflows/release.yml`](.github/workflows/release.yml).
+
 ### WAV input and preview
 
 STK Forge reads RIFF/WAVE files with PCM samples at 8-, 16-, 24-, or 32-bit depth, plus IEEE floating-point samples at 32- or 64-bit depth. The parser accepts standard `fmt ` and `data` chunks and safely ignores unrelated RIFF chunks such as `LIST`, `cue`, and `fact`.
@@ -127,7 +164,7 @@ The Audio Explorer and assigned pads use one local preview player, with a shared
 
 An `.stk` file is a compiled binary kit container, not a documented general-purpose interchange format. The current implementation targets the SmplTrek firmware 3.2 profile. It writes and validates the known `VDK0PR\0` header, a `KTDT` pad-metadata block, and embedded RIFF/WAV audio. The active profile supports up to 15 sample pads; its audio pipeline normalizes source material for the SmplTrek target (48 kHz, 16-bit PCM WAV).
 
-These details come from reverse-engineering observed SmplTrek kit behavior. Some container bytes remain of unknown purpose, and Sonicware may change device behavior in future firmware. A structurally valid file is therefore not a compatibility guarantee for another device or firmware.
+These details come from reverse-engineering observed SmplTrek kit behavior. Some container bytes remain of unknown purpose, and Sonicware may change device behavior in future firmware. A structurally valid file is therefore not a compatibility guarantee for another device or firmware. The evidential basis for these limits — verified facts, unvalidated vendor claims, and the open questions that remain — is recorded in [`docs/research/2026-08-28-STK-Sonicware-compatibility.md`](docs/research/2026-08-28-STK-Sonicware-compatibility.md).
 
 The field-level container reference is available in [`docs/file_format.md`](docs/file_format.md), with its original source and attribution.
 
