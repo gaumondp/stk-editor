@@ -2,7 +2,7 @@
 
 <script lang="ts">
 	import { tr } from '../lib/i18n';
-	import { newKit, openKit, openRecent, recentStore } from '../stores/app';
+	import { newKit, openKit, openRecent, recentStore, stkInspectOpen } from '../stores/app';
 	import { open } from '@tauri-apps/plugin-dialog';
 
 	async function doNew() {
@@ -36,6 +36,7 @@
 	<div class="actions">
 		<button class="btn primary" type="button" onclick={doNew}>{tr('menu.new')}</button>
 		<button class="btn" type="button" onclick={doOpen}>{tr('menu.open')}</button>
+		<button class="btn" type="button" onclick={() => stkInspectOpen.set(true)}>{tr('menu.open_compiled')}</button>
 	</div>
 
 	{#if recentProjects.length}

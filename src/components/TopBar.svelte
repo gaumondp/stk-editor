@@ -25,7 +25,7 @@
 	} from '../stores/app';
 	import { tr, locale, setLocale, available } from '../lib/i18n';
 	import { onMount } from 'svelte';
-	import brandLogo from '../assets/stk-editor-icon.svg?raw';
+	import { migrateStkEditorPreferences, readMigratedStorage } from '../lib/local-storage';
 	import { open, save, ask } from '@tauri-apps/plugin-dialog';
 	import { success, error } from '../stores/notify';
 	import type { CompileReport } from '../lib/commands';
@@ -47,18 +47,14 @@
 	let uiScale = $state<UiScale>(initialUiScale());
 
 	function initialTheme(): Theme {
-		try {
-			return localStorage.getItem('stk-editor.theme') === 'light' ? 'light' : 'dark';
-		} catch {
-			return 'dark';
-		}
+		return readMigratedStorage('stk-forge.theme', 'stk-editor.theme') === 'light' ? 'light' : 'dark';
 	}
 
 	function setTheme(next: Theme) {
 		theme = next;
 		document.documentElement.dataset.theme = next;
 		try {
-			localStorage.setItem('stk-editor.theme', next);
+			localStorage.setItem('stk-forge.theme', next);
 		} catch {}
 	}
 
@@ -68,12 +64,8 @@
 
 	/** Reads the saved whole-interface scale, with 100% as the safe default. */
 	function initialUiScale(): UiScale {
-		try {
-			const stored = Number(localStorage.getItem('stk-editor.ui-scale'));
-			return UI_SCALES.includes(stored as UiScale) ? stored as UiScale : 100;
-		} catch {
-			return 100;
-		}
+		const stored = Number(readMigratedStorage('stk-forge.ui-scale', 'stk-editor.ui-scale'));
+		return UI_SCALES.includes(stored as UiScale) ? stored as UiScale : 100;
 	}
 
 	/** Applies and persists a complete WebView scale, falling back to CSS zoom outside Tauri. */
@@ -85,7 +77,7 @@
 		delete document.documentElement.dataset.zoomMode;
 		document.documentElement.style.zoom = '';
 		try {
-			localStorage.setItem('stk-editor.ui-scale', String(next));
+			localStorage.setItem('stk-forge.ui-scale', String(next));
 		} catch {}
 		void import('@tauri-apps/api/webview')
 			.then(({ getCurrentWebview }) => getCurrentWebview().setZoom(factor))
@@ -101,6 +93,7 @@
 	}
 
 	onMount(() => {
+		migrateStkEditorPreferences();
 		setTheme(theme);
 		setUiScale(uiScale);
 		window.addEventListener('click', closeMenuOnClickAway);
@@ -240,7 +233,7 @@
 
 <header class="topbar" bind:this={topbar}>
 	<div class="brand" aria-label={tr('app.title')}>
-		<span class="brand-logo" data-testid="brand-logo" aria-hidden="true">{@html brandLogo}</span>
+		<img class="brand-logo" data-testid="brand-logo" src="/assets/stk-forge-logo.png" alt="" aria-hidden="true" />
 		<span class="brand-name">{tr('app.title')}</span>
 	</div>
 	<div class="menu-wrap">

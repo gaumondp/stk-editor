@@ -199,7 +199,7 @@ test('9. Close kit asks before discarding changes and returns to welcome', async
 	await expect(page.locator('.assignment-target')).toHaveCount(15);
 	await chooseMenuItem(page, 'Kit', 'Close kit');
 	await page.getByRole('button', { name: 'Discard' }).click();
-	await expect(page.getByRole('heading', { name: 'STK Editor' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'STK Forge' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'New kit' })).toBeVisible();
 });
 
@@ -226,7 +226,7 @@ test('10. Close kit stays open when saving is cancelled', async ({ page }) => {
 	await expect(page.getByRole('alertdialog')).toHaveCount(0);
 	await page.waitForTimeout(100);
 	await expect(page.locator('.assignment-target')).toHaveCount(15);
-	await expect(page.getByRole('heading', { name: 'STK Editor' })).toHaveCount(0);
+	await expect(page.getByRole('heading', { name: 'STK Forge' })).toHaveCount(0);
 });
 
 
@@ -320,12 +320,12 @@ test('16. About is available from the header Help menu and exposes diagnostics',
 	await page.getByRole('button', { name: 'Help' }).click();
 	await expect(page.getByRole('option', { name: 'README', exact: true })).toHaveCount(0);
 	await page.getByRole('option', { name: 'About', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'About STK Editor' });
+	const dialog = page.getByRole('dialog', { name: 'About STK Forge' });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole('button', { name: 'Copy diagnostic information' })).toBeVisible();
 	await expect(dialog.getByText('Developed by Patrick Gaumond')).toBeVisible();
 	await expect(dialog.getByText('Create editable kits, compile .stk files, and inspect compiled kits locally.')).toBeVisible();
-	await expect(dialog.getByText(/STK Editor has not validated that workflow/)).toBeVisible();
+	await expect(dialog.getByText(/STK Forge has not validated that workflow/)).toBeVisible();
 	await expect(dialog.getByRole('link')).toHaveCount(0);
 });
 
@@ -373,7 +373,7 @@ test('18. Welcome omits compatibility notices and lists five recent projects bel
 		});
 	});
 	await page.goto('/');
-	await expect(page.getByRole('heading', { name: 'STK Editor' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'STK Forge' })).toBeVisible();
 	await expect(page.getByText('Tested only with Sonicware SmplTrek firmware 3.2.')).toHaveCount(0);
 	await expect(page.getByText(/ELZ_1 Play STK data is documented by Sonicware, but is not verified/)).toHaveCount(0);
 	await expect(page.getByText('Kits récents:')).toBeVisible();
@@ -384,6 +384,8 @@ test('18. Welcome omits compatibility notices and lists five recent projects bel
 	await expect(page.getByRole('button', { name: 'project-1.json' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'project-4.json' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'project-5.json' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Open compiled kit…' }).click();
+	await expect(page.getByRole('dialog', { name: 'Open Compiled Kit' })).toBeVisible();
 });
 
 
@@ -395,7 +397,7 @@ test('19. Header uses the 64px graphical logo beside one gold product title', as
 	await expect(logo.locator('svg')).toHaveAttribute('viewBox', '0 0 1024 1024');
 	const box = await logo.boundingBox();
 	expect(box?.width).toBe(64);
-	await expect(page.locator('.brand-name')).toHaveText('STK Editor');
+	await expect(page.locator('.brand-name')).toHaveText('STK Forge');
 });
 
 
@@ -470,7 +472,7 @@ test('21. Audio Explorer exposes the shared WAV preview volume control', async (
 test('22. Pad controls and theme toggle are localized and visible', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.theme', 'dark');
+		localStorage.setItem('stk-forge.theme', 'dark');
 	});
 	await startNewKit(page);
 	await expect(page.getByRole('heading', { name: 'Audio pad assignments' })).toBeVisible();
@@ -563,7 +565,7 @@ test('22b. Assigned pad rows always support move and swap by drag', async ({ pag
 test('23. Persistent UI scale replaces the obsolete view selector', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '100');
+		localStorage.setItem('stk-forge.ui-scale', '100');
 	});
 	await startNewKit(page);
 	const scale = page.getByRole('combobox', { name: 'Interface scale' });
@@ -577,7 +579,7 @@ test('23. Persistent UI scale replaces the obsolete view selector', async ({ pag
 	await scale.selectOption('150');
 	await expect(page.locator('html')).toHaveCSS('--ui-scale', '1.5');
 	await expect(page.locator('html')).toHaveAttribute('data-ui-scale', '150');
-	await expect.poll(() => page.evaluate(() => localStorage.getItem('stk-editor.ui-scale'))).toBe('150');
+	await expect.poll(() => page.evaluate(() => localStorage.getItem('stk-forge.ui-scale'))).toBe('150');
 	const pads = await page.locator('.pads-svg').boundingBox();
 	expect(pads).not.toBeNull();
 	expect(pads!.width).toBeGreaterThanOrEqual(padsAt125!.width);
@@ -646,10 +648,10 @@ test('25. Physical pad text is non-selectable and double-click keeps WAV preview
 	await physicalPad.dblclick();
 	await expect(physicalPad).toHaveClass(/previewing/);
 });
-test('25. Pad assignments remain top-aligned at 200% scale', async ({ page }) => {
+test('26. Pad assignments remain top-aligned at 200% scale', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '100');
+		localStorage.setItem('stk-forge.ui-scale', '100');
 	});
 	await startNewKit(page);
 	await page.getByRole('combobox', { name: 'Interface scale' }).selectOption('200');
@@ -662,10 +664,10 @@ test('25. Pad assignments remain top-aligned at 200% scale', async ({ page }) =>
 });
 
 
-test('26. Empty Audio Explorer does not create vertical overflow', async ({ page }) => {
+test('27. Empty Audio Explorer does not create vertical overflow', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '100');
+		localStorage.setItem('stk-forge.ui-scale', '100');
 	});
 	await startNewKit(page);
 	await page.getByRole('combobox', { name: 'Interface scale' }).selectOption('200');
@@ -694,7 +696,7 @@ test('26. Empty Audio Explorer does not create vertical overflow', async ({ page
 });
 
 
-test('27. WAV list columns are configurable and Explorer width persists', async ({ page }) => {
+test('28. WAV list columns are configurable and Explorer width persists', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
 		Object.defineProperty(window, '__TAURI_INTERNALS__', {
@@ -754,9 +756,9 @@ test('27. WAV list columns are configurable and Explorer width persists', async 
 test('29. Audio Explorer restores its saved visual width at 200% scale', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '200');
-		localStorage.removeItem('stk-editor.audio-explorer.width');
-		localStorage.setItem('stk-editor.audio-explorer.visual-width.v2', '960');
+		localStorage.setItem('stk-forge.ui-scale', '200');
+		localStorage.removeItem('stk-forge.audio-explorer.width');
+		localStorage.setItem('stk-forge.audio-explorer.visual-width.v2', '960');
 	});
 	await startNewKit(page);
 	await expect(page.locator('.audio-explorer')).toHaveCSS('flex-basis', '320px');
@@ -766,7 +768,7 @@ test('29. Audio Explorer restores its saved visual width at 200% scale', async (
 test('30. Enlarged workspace starts with the pad facade reachable from the left', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '200');
+		localStorage.setItem('stk-forge.ui-scale', '200');
 	});
 	await startNewKit(page);
 	const layout = await page.evaluate(() => {
@@ -782,7 +784,7 @@ test('30. Enlarged workspace starts with the pad facade reachable from the left'
 test('31. Enlarged workspace anchors its oversized stage at the left edge', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '200');
+		localStorage.setItem('stk-forge.ui-scale', '200');
 	});
 	await startNewKit(page);
 	await expect(page.locator('.workspace')).toHaveCSS('justify-content', 'flex-start');
@@ -797,7 +799,7 @@ test('31. Enlarged workspace anchors its oversized stage at the left edge', asyn
 test('32. CSS zoom fallback keeps the app root within the viewport width', async ({ page }) => {
 	await page.addInitScript(() => {
 		localStorage.setItem('locale', 'en');
-		localStorage.setItem('stk-editor.ui-scale', '200');
+		localStorage.setItem('stk-forge.ui-scale', '200');
 	});
 	await startNewKit(page);
 	const metrics = await page.evaluate(() => {
@@ -829,6 +831,446 @@ test('33. Quit menu exits the native application after the guard succeeds', asyn
 	});
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Kit', exact: true }).click();
-	await page.getByRole('menuitem', { name: 'Quit STK Editor', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Quit STK Forge', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => (window as typeof window & { __appExitRequested?: boolean }).__appExitRequested)).toBe(true);
+});
+
+
+// --- Pad parameter editor (Tasks 3-4) --------------------------------------
+
+/**
+ * Installs a Tauri IPC mock exposing a WAV folder with two files, complete
+ * enough for parameter mutation: setParam writes only to the Svelte store, so
+ * no extra command is required, and a permissive default returns undefined for
+ * anything else the editor might invoke.
+ * @param {Page} page - The Playwright page to inject the init script into.
+ * @returns {Promise<void>} Resolves once the init script is registered.
+ */
+async function mockTauriWithWavFolder(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		localStorage.setItem('locale', 'en');
+		Object.defineProperty(window, '__TAURI_INTERNALS__', {
+			value: {
+				metadata: { currentWindow: { label: 'main' } },
+				transformCallback: () => 1,
+				unregisterCallback: () => {},
+				invoke: async (command: string) => {
+					if (command === 'plugin:dialog|open') return '/fixtures';
+					if (command === 'cmd_list_wavs') return [
+						{ name: 'kick.wav', path: '/fixtures/kick.wav', ext: 'wav', size: 42, durationMs: 250, sampleRate: 48_000, channels: 1, bits: 16, compatible: true },
+						{ name: 'snare.wav', path: '/fixtures/snare.wav', ext: 'wav', size: 42, durationMs: 250, sampleRate: 48_000, channels: 1, bits: 16, compatible: true },
+					];
+					if (command === 'cmd_get_profile') return { pad_count: 16, active_pads: Array.from({ length: 15 }, (_, index) => index + 1), special_pads: [16], name: 'SmplTrek' };
+					if (command === 'cmd_load_recent') return { entries: [] };
+					if (command === 'cmd_validate') return { errors: [], warnings: [] };
+					return undefined;
+				},
+			},
+		});
+	});
+}
+
+test('Pad parameter editor stays disabled until an assigned pad is selected and follows the physical pad', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+
+	const editor = page.getByTestId('pad-parameter-editor');
+	const volumeKnob = page.getByTestId('pad-knob-volume');
+
+	// (a) The shared editor starts disabled with no selected assigned pad.
+	await expect(editor).toBeVisible();
+	await expect(editor).toHaveClass(/disabled/);
+	await expect(volumeKnob).toBeDisabled();
+
+	// Assign kick.wav to Pad 1 through the existing WAV-folder mouse-drag flow.
+	await page.getByRole('button', { name: 'Choose folder…' }).click();
+	const source = page.locator('.file-row', { hasText: 'kick.wav' });
+	const targetRow = page.locator('.assignment-target[aria-label="Pad 1"]');
+	const sourceBounds = await source.boundingBox();
+	const targetBounds = await targetRow.boundingBox();
+	expect(sourceBounds).not.toBeNull();
+	expect(targetBounds).not.toBeNull();
+	const sourcePoint = { clientX: sourceBounds!.x + sourceBounds!.width / 2, clientY: sourceBounds!.y + sourceBounds!.height / 2 };
+	const targetPoint = { clientX: targetBounds!.x + targetBounds!.width / 2, clientY: targetBounds!.y + targetBounds!.height / 2 };
+	await source.evaluate((element, point) => element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, ...point })), sourcePoint);
+	await page.evaluate((point) => window.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, button: 0, ...point })), targetPoint);
+	await page.evaluate((point) => window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0, ...point })), targetPoint);
+	await expect(targetRow).toContainText('kick.wav');
+
+	// (b) Selecting the assigned row enables the editor and binds it to Pad 1.
+	await targetRow.click();
+	await expect(editor).not.toHaveClass(/disabled/);
+	await expect(volumeKnob).toBeEnabled();
+	await expect(page.getByTestId('pad-parameter-heading')).toContainText('Pad 1 selected');
+	await expect(page.getByTestId('pad-parameter-heading')).toContainText('kick.wav');
+	await expect(editor).toContainText('Drag a knob up or down, or type a value below.');
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
+	await expect(page.getByTestId('pad-knob-value-volume')).toHaveText('100%');
+	await expect(page.getByTestId('pad-knob-value-pan')).toHaveText('Center');
+
+	// (c) Clicking the matching physical pad selects the same pad and keeps the
+	// editor bound and synchronized to Pad 1.
+	await page.locator('.pads-svg .track-pad[data-pad="1"]').click();
+	await expect(editor).not.toHaveClass(/disabled/);
+	await expect(page.getByTestId('pad-parameter-heading')).toContainText('Pad 1 selected');
+	await expect(page.getByTestId('pad-parameter-heading')).toContainText('kick.wav');
+	await expect(editor).toContainText('Drag a knob up or down, or type a value below.');
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
+	await expect(page.getByTestId('pad-knob-value-volume')).toHaveText('100%');
+	await expect(page.getByTestId('pad-knob-value-pan')).toHaveText('Center');
+});
+
+test('Pad parameter editor drag cancels when selection changes and never writes a stale value to the new pad', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await page.getByRole('button', { name: 'Choose folder…' }).click();
+
+	// Assign two distinct WAVs so each pad's volume is observable independently.
+	const drag = async (fileName: string, padId: number) => {
+		const source = page.locator('.file-row', { hasText: fileName });
+		const target = page.locator(`.assignment-target[aria-label="Pad ${padId}"]`);
+		const sourceBox = await source.boundingBox();
+		const targetBox = await target.boundingBox();
+		expect(sourceBox).not.toBeNull();
+		expect(targetBox).not.toBeNull();
+		await source.dispatchEvent('mousedown', { button: 0, clientX: sourceBox!.x + 6, clientY: sourceBox!.y + 6 });
+		await page.mouse.move(targetBox!.x + targetBox!.width / 2, targetBox!.y + targetBox!.height / 2);
+		await page.mouse.up();
+		await expect(target).toContainText(fileName);
+	};
+	await drag('kick.wav', 1);
+	await drag('snare.wav', 2);
+
+	const editor = page.getByTestId('pad-parameter-editor');
+	const volumeKnob = page.getByTestId('pad-knob-volume');
+
+	// Select Pad 1; both pads start at the default volume of 100.
+	await page.locator('.assignment-target[aria-label="Pad 1"]').click();
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
+
+	// Begin a genuine pointer drag on the volume knob and move DOWN, which
+	// lowers Pad 1's volume below 100 through the real drag path.
+	const knobBox = await volumeKnob.boundingBox();
+	expect(knobBox).not.toBeNull();
+	const cx = knobBox!.x + knobBox!.width / 2;
+	const cy = knobBox!.y + knobBox!.height / 2;
+	await volumeKnob.dispatchEvent('pointerdown', { clientX: cx, clientY: cy });
+	await page.evaluate((y) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: y })), cy + 100);
+	// Pad 1's volume has dropped; capture the mid-drag value it settled on.
+	await expect(volumeKnob).not.toHaveAttribute('aria-valuenow', '100');
+	const pad1DraggedValue = await volumeKnob.getAttribute('aria-valuenow');
+
+	// Switch selection to Pad 2 WHILE the pointer is still down, via global arrow
+	// navigation (a real keydown, NOT a click — a click would dispatch its own
+	// pointerup and end the drag, masking the race). The drag began on Pad 1 but
+	// selection has now moved.
+	await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight', bubbles: true })));
+	await expect(page.getByTestId('pad-parameter-heading')).toContainText('Pad 2 selected');
+	await expect(page.getByTestId('pad-parameter-heading')).toContainText('snare.wav');
+
+	// A further pointer move must NOT write the stale drag result into Pad 2.
+	await page.evaluate((y) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: 0, clientY: y })), cy + 200);
+	await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', {})));
+
+	// The blocker invariant: Pad 2 stays at its untouched default. The drag began
+	// on Pad 1 (which had already dropped to pad1DraggedValue before the switch),
+	// so a post-switch move would have committed that stale value against Pad 2
+	// if the drag were not terminated on selection change. It stays at 100.
+	expect(Number(pad1DraggedValue)).toBeLessThan(100);
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
+});
+
+/**
+ * Assigns kick.wav to Pad 1 through the existing WAV-folder mouse-drag flow and
+ * selects it, leaving the pad parameter editor enabled and bound to Pad 1.
+ * @param {Page} page - A page already primed with mockTauriWithWavFolder + a new kit.
+ * @returns {Promise<void>} Resolves once Pad 1 holds kick.wav and is selected.
+ */
+async function assignAndSelectPadOne(page: Page): Promise<void> {
+	await page.getByRole('button', { name: 'Choose folder…' }).click();
+	const source = page.locator('.file-row', { hasText: 'kick.wav' });
+	const targetRow = page.locator('.assignment-target[aria-label="Pad 1"]');
+	const sourceBounds = await source.boundingBox();
+	const targetBounds = await targetRow.boundingBox();
+	expect(sourceBounds).not.toBeNull();
+	expect(targetBounds).not.toBeNull();
+	await source.dispatchEvent('mousedown', { button: 0, clientX: sourceBounds!.x + 6, clientY: sourceBounds!.y + 6 });
+	await page.mouse.move(targetBounds!.x + targetBounds!.width / 2, targetBounds!.y + targetBounds!.height / 2);
+	await page.mouse.up();
+	await expect(targetRow).toContainText('kick.wav');
+	await targetRow.click();
+}
+
+/**
+ * Performs a real vertical pointer drag on a knob: pointerdown at its centre,
+ * then a window pointermove offset by deltaY pixels (positive = downward), then
+ * a window pointerup — the exact event path the editor listens on.
+ * @param {Page} page - The Playwright page.
+ * @param {import('@playwright/test').Locator} knob - The knob to drag.
+ * @param {number} deltaY - Vertical offset in pixels; positive drags down.
+ * @returns {Promise<void>} Resolves after pointerup.
+ */
+async function dragKnob(page: Page, knob: import('@playwright/test').Locator, deltaY: number): Promise<void> {
+	const box = await knob.boundingBox();
+	expect(box).not.toBeNull();
+	const cx = box!.x + box!.width / 2;
+	const cy = box!.y + box!.height / 2;
+	await knob.dispatchEvent('pointerdown', { clientX: cx, clientY: cy });
+	await page.evaluate(({ x, y }) => window.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y })), { x: cx, y: cy + deltaY });
+	await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', {})));
+}
+
+test('Pad parameter editor activates a knob on click and mirrors its value into the single input', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	const field = page.getByTestId('pad-parameter-field');
+	const panKnob = page.getByTestId('pad-knob-pan');
+	const pitchKnob = page.getByTestId('pad-knob-pitch');
+
+	// Clicking the Pan knob activates it (aria-current) and the single input shows
+	// Pan's current value (default 0), not Volume's.
+	await panKnob.click();
+	await expect(panKnob).toHaveAttribute('aria-current', 'true');
+	await expect(field).toHaveValue('0');
+
+	// Clicking a different knob re-targets the same single input to that value.
+	await pitchKnob.click();
+	await expect(pitchKnob).toHaveAttribute('aria-current', 'true');
+	await expect(panKnob).not.toHaveAttribute('aria-current', 'true');
+	await expect(field).toHaveValue('0');
+});
+
+test('Pad parameter editor vertical drag changes the value within bounds (up increases, down decreases)', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	// Pan starts at 0 in a symmetric range (-64..63), so both drag directions are
+	// observable without hitting a boundary immediately.
+	const panKnob = page.getByTestId('pad-knob-pan');
+	await panKnob.click();
+	await expect(panKnob).toHaveAttribute('aria-valuenow', '0');
+
+	// Dragging DOWN decreases the value. The store updates optimistically and
+	// synchronously (the 300ms debounce only coalesces the undo snapshot), so the
+	// live aria-valuenow is stable to assert on without waiting on any timer.
+	await dragKnob(page, panKnob, 40);
+	const afterDown = Number(await panKnob.getAttribute('aria-valuenow'));
+	expect(afterDown).toBeLessThan(0);
+	expect(afterDown).toBeGreaterThanOrEqual(-64);
+
+	// Dragging UP from the lowered value increases it again.
+	await dragKnob(page, panKnob, -80);
+	const afterUp = Number(await panKnob.getAttribute('aria-valuenow'));
+	expect(afterUp).toBeGreaterThan(afterDown);
+	expect(afterUp).toBeLessThanOrEqual(63);
+
+	// A large downward drag saturates at the lower bound, never below it.
+	await dragKnob(page, panKnob, 1000);
+	await expect(panKnob).toHaveAttribute('aria-valuenow', '-64');
+
+	// A large upward drag saturates at the upper bound, never above it.
+	await dragKnob(page, panKnob, -1000);
+	await expect(panKnob).toHaveAttribute('aria-valuenow', '63');
+});
+
+test('Pad parameter editor drag on the active knob syncs the shared input to the knob value', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	const field = page.getByTestId('pad-parameter-field');
+	const panKnob = page.getByTestId('pad-knob-pan');
+	const panBadge = page.getByTestId('pad-knob-value-pan');
+
+	// Make Pan the active parameter, so the single shared field mirrors it.
+	await panKnob.click();
+	await expect(field).toHaveValue('0');
+
+	// A real drag lowers Pan; the field must follow the knob's new visible value
+	// live (no stale field), matching both the aria-valuenow and the badge.
+	await dragKnob(page, panKnob, 40);
+	const draggedValue = await panKnob.getAttribute('aria-valuenow');
+	expect(Number(draggedValue)).toBeLessThan(0);
+	await expect(field).toHaveValue(String(draggedValue));
+	await expect(panBadge).toContainText('Left');
+	await expect(panBadge).toContainText(String(Math.abs(Number(draggedValue))));
+
+	// A second drag in the other direction keeps the field synchronized.
+	await dragKnob(page, panKnob, -20);
+	const secondValue = await panKnob.getAttribute('aria-valuenow');
+	await expect(field).toHaveValue(String(secondValue));
+
+	// Signed-integer acceptance: typing the lower bound -64 into Pan commits it,
+	// complementing the malformed/out-of-range rejection covered separately.
+	await field.click();
+	await field.fill('-64');
+	await field.press('Enter');
+	await expect(panKnob).toHaveAttribute('aria-valuenow', '-64');
+	await expect(field).toHaveValue('-64');
+});
+
+test('Pad parameter editor applies a valid integer typed then confirmed with Enter', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	const field = page.getByTestId('pad-parameter-field');
+	const volumeKnob = page.getByTestId('pad-knob-volume');
+
+	// Volume is active by default at 100.
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
+	await field.click();
+	await field.fill('42');
+	await field.press('Enter');
+
+	// The typed value commits to the assigned sample, visible on the knob.
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '42');
+	await expect(field).toHaveValue('42');
+	await expect(page.getByTestId('pad-knob-value-volume')).toContainText('42');
+});
+
+test('Pad parameter editor applies a valid integer typed then confirmed by leaving the field', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	const field = page.getByTestId('pad-parameter-field');
+	const volumeKnob = page.getByTestId('pad-knob-volume');
+
+	await field.click();
+	await field.fill('63');
+	// Blur by moving focus elsewhere; the edited draft commits on blur.
+	await volumeKnob.focus();
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '63');
+	await expect(field).toHaveValue('63');
+});
+
+test('Pad parameter editor restores the pre-edit value when a typed draft is cancelled with Escape', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	const field = page.getByTestId('pad-parameter-field');
+	const volumeKnob = page.getByTestId('pad-knob-volume');
+
+	// Establish a known committed value first, so Escape's restore target is
+	// unambiguous and distinct from the default.
+	await field.click();
+	await field.fill('55');
+	await field.press('Enter');
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '55');
+
+	// Type a different value, then Escape: the field reverts to 55 and the sample
+	// is never touched by the abandoned draft.
+	await field.click();
+	await field.fill('12');
+	await field.press('Escape');
+	await expect(field).toHaveValue('55');
+	await expect(volumeKnob).toHaveAttribute('aria-valuenow', '55');
+});
+
+test('Pad parameter editor rejects invalid, fractional, malformed, and out-of-range input without changing the sample', async ({ page }) => {
+	await mockTauriWithWavFolder(page);
+	await startNewKit(page);
+	await assignAndSelectPadOne(page);
+
+	const field = page.getByTestId('pad-parameter-field');
+	const volumeKnob = page.getByTestId('pad-knob-volume');
+
+	// Volume default is 100 (also its max). Each rejected draft must leave the
+	// committed sample value untouched — asserted on the observable knob value.
+	const rejected = ['abc', '3.5', '5px', '', '  ', '101', '-1'];
+	for (const draft of rejected) {
+		await field.click();
+		await field.fill(draft);
+		await field.press('Enter');
+		// The invalid draft does not commit: the knob stays at 100.
+		await expect(volumeKnob).toHaveAttribute('aria-valuenow', '100');
+		// The field shows the range hint rather than silently clamping.
+		await expect(page.getByTestId('pad-parameter-hint')).toBeVisible();
+		// Escape clears the bad draft back to the live value before the next case.
+		await field.press('Escape');
+		await expect(field).toHaveValue('100');
+	}
+});
+
+// --- SD Card Reader (S? — Task 4) -------------------------------------------
+
+const VALID_SD_REPORT = {
+	selectedPath: '/Volumes/NO NAME',
+	smpltrekPath: '/Volumes/NO NAME/SmplTrek',
+	valid: true,
+	missingDirectories: [],
+	projects: ['Getting Started'],
+	presets: { audioDrum: 3, audioInst: 1, kit: 2 },
+	audioFiles: [
+		{ relativePath: 'Pool/Audio/Drum/kick.wav', bytes: 1024, sourceGroup: 'Pool' },
+	],
+};
+
+const INVALID_SD_REPORT = {
+	selectedPath: '/Volumes/NO NAME',
+	smpltrekPath: null,
+	valid: false,
+	missingDirectories: [],
+	projects: [],
+	presets: { audioDrum: 0, audioInst: 0, kit: 0 },
+	audioFiles: [],
+};
+
+/**
+ * Installs a Tauri IPC mock that returns the given SD-card report from
+ * `cmd_inspect_sd_card` and a fixed selected path from the directory picker.
+ * @param {Page} page - The Playwright page to inject the init script into.
+ * @param {object} report - The camelCase wire report the backend would return.
+ * @returns {Promise<void>} Resolves once the init script is registered.
+ */
+async function mockTauriWithReport(page: Page, report: object): Promise<void> {
+	await page.addInitScript((sdReport) => {
+		localStorage.setItem('locale', 'en');
+		Object.defineProperty(window, '__TAURI_INTERNALS__', {
+			value: {
+				metadata: { currentWindow: { label: 'main' } },
+				transformCallback: () => 1,
+				unregisterCallback: () => {},
+				invoke: async (command: string) => {
+					if (command === 'plugin:dialog|open') return '/Volumes/NO NAME';
+					if (command === 'cmd_inspect_sd_card') return sdReport;
+					if (command === 'cmd_load_recent') return { entries: [] };
+					return undefined;
+				},
+			},
+		});
+	}, report);
+}
+
+test('34. SD Card Reader button opens a populated read-only report', async ({ page }) => {
+	await mockTauriWithReport(page, VALID_SD_REPORT);
+	await startNewKit(page);
+
+	const readButton = page.getByRole('button', { name: 'Read SD card' });
+	await expect(readButton).toBeVisible();
+	await expect(readButton).toHaveClass(/sd-reader-action/);
+	await expect(page.locator('.sd-reader-action svg')).toBeVisible();
+	await expect(page.locator('.sd-reader-action')).toHaveCSS('margin-top', '24px');
+
+	await readButton.click();
+	const dialog = page.getByRole('dialog', { name: 'SD Card Reader' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('Getting Started')).toBeVisible();
+	await expect(dialog.getByText('Pool/Audio/Drum/kick.wav')).toBeVisible();
+});
+
+test('35. SD Card Reader invalid report offers another card selection', async ({ page }) => {
+	await mockTauriWithReport(page, INVALID_SD_REPORT);
+	await startNewKit(page);
+
+	await page.getByRole('button', { name: 'Read SD card' }).click();
+	const dialog = page.getByRole('dialog', { name: 'SD Card Reader' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByText('No SmplTrek folder in the selected location')).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Choose another card…' })).toBeVisible();
 });

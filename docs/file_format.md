@@ -2,9 +2,9 @@
 
 > **Original source:** [jblamber/stk_writer — `file_format.md`](https://github.com/jblamber/stk_writer/blob/main/file_format.md)
 >
-> Thank you to [jblamber](https://github.com/jblamber) for documenting this format.
-
-The remainder of this document is reproduced from the source above.
+> Thank you to jblamber for documenting this format.
+>
+> **Factory-card verification (2026-08-30):** The 15 official kits on a SmplTrek SD card use the 4-byte `VDK0` tag followed by a little-endian size field equal to the file length minus 360 bytes. This corrects the earlier `VDK0PR \\x00` assertion below; the remainder of the documented chunk layout was confirmed against those files.
 
 The `.stk` file is a drum kit container format used by the SmplTrek hardware synthesizer. It bundles up to 15 WAV samples into a single file, along with metadata and internal path information.
 
@@ -22,7 +22,8 @@ The `.stk` file is a drum kit container format used by the SmplTrek hardware syn
 
 | Offset | Size | Type | Value / Description |
 | :--- | :--- | :--- | :--- |
-| `0x00` | 8 | Bytes | `"VDK0PR \x00"` (Magic signature) |
+| `0x00` | 4 | Bytes | `"VDK0"` (factory-kit tag) |
+| `0x04` | 4 | uint32_le | File length minus 360 bytes (verified on 15 factory kits) |
 | `0x08` | 4 | Zeros | Reserved |
 | `0x0C` | 4 | uint32_le | `0x00000010` (Offset to `KTDT` tag?) |
 | `0x10` | 4 | Bytes | `"KTDT"` (Chunk Tag) |

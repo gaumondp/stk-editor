@@ -12,6 +12,7 @@ import { get } from 'svelte/store';
 	import AboutDialog from './components/AboutDialog.svelte';
 	import MissingFilesDialog from './components/MissingFilesDialog.svelte';
 	import StkInspectDialog from './components/StkInspectDialog.svelte';
+	import SdCardReaderDialog from './components/SdCardReaderDialog.svelte';
 	import ToastHost from './components/ToastHost.svelte';
 	import Welcome from './components/Welcome.svelte';
 import {
@@ -30,12 +31,16 @@ import {
 		setRecentUnsaved
 	} from './stores/app';
 	import { api } from './lib/commands';
+	import type { SdCardReport } from './lib/commands';
 	import { locale } from './lib/i18n';
+	import { error } from './stores/notify';
 	import { open } from '@tauri-apps/plugin-dialog';
 
 	let showShortcuts = $state(false);
 	let showAbout = $state(false);
 	let showKitInformation = $state(false);
+	let showSdCardReader = $state(false);
+	let sdCardReport = $state<SdCardReport | null>(null);
 	let isWelcome = $derived(
 		$project.kit.name === 'NewKit' &&
 			Object.keys($project.kit.pads).length === 0 &&
@@ -98,6 +103,24 @@ import {
 		});
 		if (!out) return;
 		if (await guardUnsaved()) await openKit(out as string);
+	}
+
+	/**
+	 * Runs the read-only SD-card inspection flow: opens the native directory
+	 * picker, forwards the chosen path to the Rust scanner, and shows the report
+	 * dialog. A cancelled picker changes nothing; an invocation failure surfaces
+	 * through the existing error toast without opening the dialog.
+	 * @returns {Promise<void>} Resolves when the flow has settled.
+	 */
+	async function readSdCard(): Promise<void> {
+		const selected = await open({ directory: true, multiple: false });
+		if (!selected) return;
+		try {
+			sdCardReport = await api.inspectSdCard(selected as string);
+			showSdCardReader = true;
+		} catch (e) {
+			error(String(e));
+		}
 	}
 
 	async function requestQuit() {
@@ -172,7 +195,7 @@ import {
 			<Welcome />
 		{:else}
 			<section class="stage">
-				<DeviceView />
+				<DeviceView onReadSdCard={() => void readSdCard()} />
 				<AudioExplorer />
 			</section>
 		{/if}
@@ -182,6 +205,12 @@ import {
 	<KitInformationDialog open={showKitInformation} onClose={() => (showKitInformation = false)} />
 	<MissingFilesDialog open={$missingDialogOpen} onClose={() => missingDialogOpen.set(false)} />
 	<StkInspectDialog open={$stkInspectOpen} onClose={() => stkInspectOpen.set(false)} />
+	<SdCardReaderDialog
+		open={showSdCardReader}
+		report={sdCardReport}
+		onClose={() => (showSdCardReader = false)}
+		onChooseAnother={() => { showSdCardReader = false; void readSdCard(); }}
+	/>
 	<UnsavedDialog open={$unsavedOpen} onConfirm={unsavedResolve} />
 		<ToastHost />
 	{/key}

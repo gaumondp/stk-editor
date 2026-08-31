@@ -10,6 +10,7 @@ pub mod compile;
 pub mod stk_inspect;
 pub mod diagnostics;
 pub mod window_state;
+pub mod sd_card;
 
 pub use crate::window_state::{load_window_size, save_window_size, WindowSize};
 
@@ -64,7 +65,7 @@ fn chrono_now() -> String {
 
 pub fn prefs_path() -> Result<PathBuf, String> {
        let dir = dirs::data_local_dir().ok_or("no data dir")?;
-      Ok(dir.join("stk-editor").join("recent.json"))
+      Ok(dir.join("stk-forge").join("recent.json"))
 }
 
 pub fn load_recent() -> Result<RecentStore, String> {
@@ -478,9 +479,9 @@ pub fn export_sd(project: &Project, opts: ExportOptions) -> Result<ExportReport,
 
 fn readme_text(project: &Project, report: &CompileReport) -> String {
       format!(
-"STK Editor kit — {name}
+"STK Forge kit — {name}
 
-Exported by STK Editor v{ver}.
+Exported by STK Forge v{ver}.
 Device: {dev} (profile {prof}, firmware {fw}).
 Pads filled: {n}.
 
@@ -488,7 +489,7 @@ COMPATIBILITY
 This kit was built for the Sonicware SmplTrek (firmware 3.2). Compatibility
 with other Sonicware synthesizers or firmware versions is NOT guaranteed.
 
-JSON project files in this export are for re-editing with STK Editor. They
+JSON project files in this export are for re-editing with STK Forge. They
 are NOT read by the SmplTrek itself.
 ",
        name = project.kit.name,
@@ -654,7 +655,7 @@ mod tests {
 	#[test]
 	fn prefs_path_uses_stk_editor_namespace() {
 		let path = prefs_path().expect("local data directory should be available");
-		assert!(path.ends_with(std::path::Path::new("stk-editor").join("recent.json")));
+		assert!(path.ends_with(std::path::Path::new("stk-forge").join("recent.json")));
 	}
 
 	#[test]
@@ -697,7 +698,8 @@ mod tests {
 		assert!(report.bytes > 0);
 		assert_eq!(report.pads_filled, 0);
 		let data = std::fs::read(&tmp).unwrap();
-		assert!(data.starts_with(b"VDK0PR \0"));
+		assert_eq!(&data[0..4], b"VDK0");
+		assert_eq!(u32::from_le_bytes(data[4..8].try_into().unwrap()), data.len() as u32 - 360);
 		let _ = std::fs::remove_file(&tmp);
 	}
 
@@ -709,7 +711,16 @@ mod tests {
 		compile_to_stk(&p, tmp.to_str().unwrap(), true, true).unwrap();
 		let data = std::fs::read(&tmp).unwrap();
 
-		assert_eq!(&data[0..8], b"VDK0PR \0");
+		// Factory SmplTrek kits use a four-byte VDK0 tag followed by the
+		// file length minus the observed 360-byte container adjustment.
+		assert_eq!(&data[0..4], b"VDK0");
+		assert_eq!(u32::from_le_bytes(data[4..8].try_into().unwrap()), data.len() as u32 - 360);
+		let inspection = crate::stk_inspect::inspect(tmp.to_str().unwrap(), "en").unwrap();
+		assert!(inspection.valid, "official-layout STK must be accepted by the inspector");
+		assert!(
+			!inspection.warnings.iter().any(|warning| warning.contains("ISDT")),
+			"the embedded first ISDT block must be counted"
+		);
 		assert_eq!(&data[8..12], &[0; 4]);
 		assert_eq!(u32::from_le_bytes(data[12..16].try_into().unwrap()), 0x10);
 		assert_eq!(&data[16..20], b"KTDT");
@@ -813,7 +824,8 @@ mod tests {
 		let report = compile_to_stk(&p, tmp.to_str().unwrap(), false, true).unwrap();
 		assert!(report.bytes > 0);
 		let data = std::fs::read(&tmp).unwrap();
-		assert!(data.starts_with(b"VDK0PR \0"));
+		assert_eq!(&data[0..4], b"VDK0");
+		assert_eq!(u32::from_le_bytes(data[4..8].try_into().unwrap()), data.len() as u32 - 360);
 		let _ = std::fs::remove_file(&tmp);
 	}
 

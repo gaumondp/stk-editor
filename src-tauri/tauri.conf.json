@@ -1,8 +1,8 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "STK Editor",
+    "productName": "STK Forge",
     "version": "0.1.0",
-    "identifier": "com.stkeditor.desktop",
+    "identifier": "com.stkforge.desktop",
     "build": {
      "frontendDist": "../dist",
      "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
      "windows": [
       {
        "label": "main",
-       "title": "STK Editor",
+       "title": "STK Forge",
        "width": 1280,
        "height": 820,
        "minWidth": 960,
@@ -35,7 +35,7 @@
       "externalBin": [],
      "category": "Utility",
      "shortDescription": "Create and compile sample kits for the Sonicware SmplTrek (fw 3.2)",
-     "longDescription": "STK Editor lets you create, edit, save and compile sample kits for the Sonicware SmplTrek firmware 3.2. Test only on SmplTrek fw 3.2.",
+     "longDescription": "STK Forge lets you create, edit, save and compile sample kits for the Sonicware SmplTrek firmware 3.2. Test only on SmplTrek fw 3.2.",
       "macOS": {
         "minimumSystemVersion": "13.0",
         "hardenedRuntime": true

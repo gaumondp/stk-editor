@@ -3,8 +3,8 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import { tr } from './i18n';
 import { notify } from '../stores/notify';
 
-const VOLUME_STORAGE_KEY = 'stk-editor.preview-volume';
-const MUTE_STORAGE_KEY = 'stk-editor.preview-muted';
+const VOLUME_STORAGE_KEY = 'stk-forge.preview-volume';
+const MUTE_STORAGE_KEY = 'stk-forge.preview-muted';
 const DEFAULT_VOLUME = 0.8;
 
 function clampVolume(value: number): number {

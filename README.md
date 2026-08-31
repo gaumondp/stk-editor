@@ -1,11 +1,11 @@
-# STK Editor
+# STK Forge
 
 > A local desktop editor for Sonicware `.stk` kits. **Actively tested with Sonicware SmplTrek firmware 3.2.**
 
 <p align="center">
-  <img src="src-tauri/icons/128x128@2x.png" width="256" alt="STK Editor logo">
+  <img src="src-tauri/icons/128x128@2x.png" width="256" alt="STK Forge logo">
 </p>
-STK Editor creates editable JSON companions, compiles `.stk` kits, inspects compiled kits without changing the original file, and exports a SmplTrek SD-card layout. It runs locally: no cloud account, telemetry, or upload is required.
+STK Forge creates editable JSON companions, compiles `.stk` kits, inspects compiled kits without changing the original file, and exports a SmplTrek SD-card layout. It runs locally: no cloud account, telemetry, or upload is required.
 
 ![Status](https://img.shields.io/badge/status-pre--alpha-orange) ![Tauri](https://img.shields.io/badge/Tauri-2-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -20,9 +20,10 @@ STK Editor creates editable JSON companions, compiles `.stk` kits, inspects comp
 - Compile a SmplTrek-targeted `.stk` file.
 - Open a compiled `.stk` file read-only, inspect its structure, and extract an editable kit package with provenance.
 - Export either device files only or a complete editable package for a SmplTrek SD card.
+- Inspect a selected SmplTrek SD-card directory locally and read-only to list projects, presets, and WAV files.
 - Find and relink missing WAV files after a project folder moves.
 
-![STK Editor interface showing pad assignments and the Audio Files explorer](docs/screenshot-1.png)
+![STK Forge interface showing pad assignments and the Audio Files explorer](docs/screenshot-1.png)
 
 ## Quick start
 
@@ -33,7 +34,7 @@ STK Editor creates editable JSON companions, compiles `.stk` kits, inspects comp
 5. Choose **Export → Compile to .stk…** to create a SmplTrek-targeted compiled kit.
 6. Choose **Export → Export to SD card…** for a SmplTrek card layout.
 
-To inspect an existing compiled file, choose **Kit → Open compiled kit…**. Inspection is read-only; extraction writes new WAV files, an editable JSON companion, and a provenance manifest to the destination you choose.
+To inspect an existing compiled file, choose **Open compiled kit…** on the welcome screen or **Kit → Open compiled kit…**. Inspection is read-only; extraction writes new WAV files, an editable JSON companion, and a provenance manifest to the destination you choose.
 
 ## Sound assignment
 
@@ -65,10 +66,10 @@ The pad facade shows suggested drum positions beneath the physical pads. Use **H
 
 ## Compatibility
 
-| Product | Status in STK Editor | What is known |
+| Product | Status in STK Forge | What is known |
 | --- | --- | --- |
 | **Sonicware SmplTrek, firmware 3.2** | **Actively tested** | The current compile and SD-export profile targets this device and firmware. |
-| **Sonicware ELZ_1 Play** | **Unverified** | Sonicware documents an STK DRUMMER engine and “STK data created with SmplTrek.” STK Editor has not validated this workflow on hardware. |
+| **Sonicware ELZ_1 Play** | **Unverified** | Sonicware documents an STK DRUMMER engine and “STK data created with SmplTrek.” STK Forge has not validated this workflow on hardware. |
 | **Original ELZ_1, LIVEN, Lofi-12, and other products** | **Unsupported** | No evidence of STK support was found in the source material reviewed. |
 
 The STK format is not presented here as a general Sonicware interchange format. The implementation is based on reverse-engineered SmplTrek kit behavior and can be firmware-sensitive. Do not assume a generated file is safe for an untested product or firmware.
@@ -107,18 +108,18 @@ pnpm tauri build --no-bundle
 
 ## Attribution
 
-STK Editor was inspired by [jblamber/stk_writer](https://github.com/jblamber/stk_writer). Warm thanks to jblamber for publishing the reverse-engineering work that informed our understanding of the STK format and made this editor possible. This project references that work for research and attribution; it does not copy its code.
+STK Forge was inspired by [jblamber/stk_writer](https://github.com/jblamber/stk_writer). Warm thanks to jblamber for publishing the reverse-engineering work that informed our understanding of the STK format and made this editor possible. This project references that work for research and attribution; it does not copy its code.
 
 ## License and disclaimer
 
-MIT. STK Editor is an independent project and is not affiliated with, endorsed by, or supported by Sonicware. Use it at your own risk and verify every output on the exact hardware and firmware you intend to use.
+MIT. STK Forge is an independent project and is not affiliated with, endorsed by, or supported by Sonicware. Use it at your own risk and verify every output on the exact hardware and firmware you intend to use.
 
 
 ## Technical section
 
 ### WAV input and preview
 
-STK Editor reads RIFF/WAVE files with PCM samples at 8-, 16-, 24-, or 32-bit depth, plus IEEE floating-point samples at 32- or 64-bit depth. The parser accepts standard `fmt ` and `data` chunks and safely ignores unrelated RIFF chunks such as `LIST`, `cue`, and `fact`.
+STK Forge reads RIFF/WAVE files with PCM samples at 8-, 16-, 24-, or 32-bit depth, plus IEEE floating-point samples at 32- or 64-bit depth. The parser accepts standard `fmt ` and `data` chunks and safely ignores unrelated RIFF chunks such as `LIST`, `cue`, and `fact`.
 
 The Audio Explorer and assigned pads use one local preview player, with a shared volume slider and mute state. Source files remain unchanged. During compilation, supported source audio is normalized to the SmplTrek target format: 48 kHz, 16-bit linear PCM, mono or stereo according to the selected compile option.
 
@@ -132,6 +133,6 @@ The field-level container reference is available in [`docs/file_format.md`](docs
 
 ### Why editable JSON stays separate
 
-The hardware does not read the JSON file. STK Editor uses a separate JSON companion because the compiled container is an export artifact: it does not reliably preserve the source WAV locations, the user’s kit notes, or every editor-level choice needed for a safe round trip. Keeping the editable data separate also means inspection and extraction never modify an input `.stk` file.
+The hardware does not read the JSON file. STK Forge uses a separate JSON companion because the compiled container is an export artifact: it does not reliably preserve the source WAV locations, the user’s kit notes, or every editor-level choice needed for a safe round trip. Keeping the editable data separate also means inspection and extraction never modify an input `.stk` file.
 
-The JSON schema is intentionally still named `smpltrek-kit-project` for backward compatibility with existing editable projects. It records the current device profile, kit parameters, sample references, and notes; STK Editor can then recompile a new `.stk` output at a location chosen by the user. This separation is temporary only in the sense that the format and profiles may evolve: it is currently the safer and more recoverable editing model.
+The JSON schema is intentionally still named `smpltrek-kit-project` for backward compatibility with existing editable projects. It records the current device profile, kit parameters, sample references, and notes; STK Forge can then recompile a new `.stk` output at a location chosen by the user. This separation is temporary only in the sense that the format and profiles may evolve: it is currently the safer and more recoverable editing model.

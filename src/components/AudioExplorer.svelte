@@ -12,8 +12,8 @@
 	const DEFAULT_PANEL_WIDTH = 320;
 	const MIN_PANEL_WIDTH = 260;
 	const MAX_PANEL_WIDTH = 640;
-	const COLUMNS_STORAGE_KEY = 'stk-editor.audio-explorer.columns';
-	const WIDTH_STORAGE_KEY = 'stk-editor.audio-explorer.visual-width.v2';
+	const COLUMNS_STORAGE_KEY = 'stk-forge.audio-explorer.columns';
+	const WIDTH_STORAGE_KEY = 'stk-forge.audio-explorer.visual-width.v2';
 
 	let files = $state<AudioFile[]>([]);
 	let dir = $state<string | null>(null);
@@ -77,7 +77,7 @@
 	/** Returns the saved complete-interface scale used to keep Explorer width visually stable. */
 	function uiScaleFactor(): number {
 		try {
-			const scale = Number(localStorage.getItem('stk-editor.ui-scale'));
+			const scale = Number(localStorage.getItem('stk-forge.ui-scale'));
 			return [100, 125, 150, 200].includes(scale) ? scale / 100 : 1;
 		} catch {
 			return 1;

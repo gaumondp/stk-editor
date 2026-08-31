@@ -25,7 +25,7 @@
 		copyError = null;
 		try {
 			const details = await api.diagnostics();
-			diagnostic = `STK Editor ${details.app_version}\nBuild: ${APP_BUILD_TIME || 'unknown'}\nOS: ${details.os}\nCPU: ${details.cpu}\nArchitecture: ${details.arch}\nRAM: ${details.ram_bytes} bytes`;
+			diagnostic = `STK Forge ${details.app_version}\nBuild: ${APP_BUILD_TIME || 'unknown'}\nOS: ${details.os}\nCPU: ${details.cpu}\nArchitecture: ${details.arch}\nRAM: ${details.ram_bytes} bytes`;
 			await navigator.clipboard.writeText(diagnostic);
 			copied = true;
 		} catch (e) {

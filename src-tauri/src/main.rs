@@ -11,6 +11,7 @@ use smpltrek_kit_builder_lib::{
   FindMissingReport, Project, RecentStore, ValidationResult,
 };
 use smpltrek_kit_builder_lib::stk_inspect::{StkExtractReport, StkInspectReport};
+use smpltrek_kit_builder_lib::sd_card::SdCardReport;
 use smpltrek_kit_builder_lib::diagnostics::Diagnostics;
 
 fn frontend_menu_event(menu_id: &str) -> Option<&'static str> {
@@ -34,11 +35,11 @@ fn main() {
                }
             });
          }
-         let quit = MenuItemBuilder::with_id("quit", "Quit STK Editor")
+         let quit = MenuItemBuilder::with_id("quit", "Quit STK Forge")
             .accelerator("CmdOrCtrl+Q")
             .build(app)?;
-         let app_menu = SubmenuBuilder::new(app, "STK Editor")
-            .text("open_about", "About STK Editor")
+         let app_menu = SubmenuBuilder::new(app, "STK Forge")
+            .text("open_about", "About STK Forge")
             .separator()
             .hide()
             .hide_others()
@@ -83,13 +84,15 @@ fn main() {
        // inspect
         cmd_inspect_stk,
         cmd_extract_stk,
+        // sd card
+        cmd_inspect_sd_card,
         // diagnostics
         cmd_diagnostics,
         // application lifecycle
         cmd_exit_app
       ])
       .run(tauri::generate_context!())
-      .expect("error while running STK Editor");
+      .expect("error while running STK Forge");
 }
 
 // ── Project ──────────────────────────────────────────────────────────────
@@ -217,8 +220,14 @@ fn cmd_extract_stk(
    lib::stk_inspect::extract(&path, &dest_dir, kit_name.as_deref(), &locale)
 }
 
-// ── Diagnostics ────────────────────────────────────────────────────────────
+// ── SD card ────────────────────────────────────────────────────────────────
 
+#[tauri::command]
+fn cmd_inspect_sd_card(selected_path: String) -> Result<SdCardReport, String> {
+   lib::sd_card::inspect_sd_card(&selected_path)
+}
+
+// ── Diagnostics ────────────────────────────────────────────────────────────
 #[tauri::command]
 fn cmd_diagnostics() -> Diagnostics {
    lib::diagnostics::collect()

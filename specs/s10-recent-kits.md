@@ -23,8 +23,8 @@ interface RecentStore { entries: RecentEntry[] }
 ```
 
 ## Persistence
-- File: `~/Library/Application Support/stk-editor/recent.json`
-  (macOS) / `%LOCALAPPDATA%\stk-editor\recent.json` (Windows).
+- File: `~/Library/Application Support/stk-forge/recent.json`
+  (macOS) / `%LOCALAPPDATA%\stk-forge\recent.json` (Windows).
 - Atomic write (tmp → rename).
 - Loaded on app startup → `recentStore` writable.
 

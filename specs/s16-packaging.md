@@ -20,7 +20,7 @@ NSIS). Automated release on tag push.
   "bundle": {
     "active": true,
     "targets": ["dmg", "msi"],
-    "identifier": "com.stkeditor.desktop",
+    "identifier": "com.stkforge.desktop",
     "icon": ["icons/icon.png"],
     "macOS": {
       "signingIdentity": "Developer ID Application: ...",

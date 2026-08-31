@@ -8,7 +8,13 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Open a compiled `.stk` kit directly from the welcome screen for read-only inspection or extraction.
+- Inspect a selected SmplTrek SD-card directory locally and read-only to list projects, presets, and WAV files.
 - Initial public-release preparation.
+
+### Fixed
+
+- Compiled-kit inspection and output now match the official SmplTrek `VDK0` header and first embedded `ISDT` record.
 
 ### Changed
 

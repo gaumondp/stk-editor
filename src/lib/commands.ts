@@ -188,6 +188,50 @@ export interface Diagnostics {
          ram_bytes: number
 }
 
+export interface SdPresetCounts {
+     audio_drum: number;
+      audio_inst: number;
+       kit: number
+}
+
+export interface SdAudioFile {
+     relative_path: string;
+      bytes: number;
+       source_group: string
+}
+
+export interface SdCardReport {
+     selected_path: string;
+      smpltrek_path?: string | null;
+       valid: boolean;
+        missing_directories: string[];
+         projects: string[];
+          presets: SdPresetCounts;
+           audio_files: SdAudioFile[]
+}
+
+interface BackendSdPresetCounts {
+  audioDrum: number;
+  audioInst: number;
+  kit: number;
+}
+
+interface BackendSdAudioFile {
+  relativePath: string;
+  bytes: number;
+  sourceGroup: string;
+}
+
+interface BackendSdCardReport {
+  selectedPath: string;
+  smpltrekPath?: string | null;
+  valid: boolean;
+  missingDirectories: string[];
+  projects: string[];
+  presets: BackendSdPresetCounts;
+  audioFiles: BackendSdAudioFile[];
+}
+
 interface BackendSample {
   id: string;
   fileName: string;
@@ -251,6 +295,27 @@ function fromBackendProject(project: BackendProject): Project {
   return { ...project, kit: { ...project.kit, pads } };
 }
 
+/** Converts Rust's serde camelCase SD-card report back to the UI's snake_case model. */
+function fromBackendSdCardReport(report: BackendSdCardReport): SdCardReport {
+  return {
+    selected_path: report.selectedPath,
+    smpltrek_path: report.smpltrekPath,
+    valid: report.valid,
+    missing_directories: report.missingDirectories,
+    projects: report.projects,
+    presets: {
+      audio_drum: report.presets.audioDrum,
+      audio_inst: report.presets.audioInst,
+      kit: report.presets.kit,
+    },
+    audio_files: report.audioFiles.map((file) => ({
+      relative_path: file.relativePath,
+      bytes: file.bytes,
+      source_group: file.sourceGroup,
+    })),
+  };
+}
+
 // ---- commands ----
 
 export const api = {
@@ -294,6 +359,8 @@ export const api = {
     invoke<ExportReport>('cmd_export', { project: toBackendProject(project), opts }),
   listWavs: (dir: string) => invoke<AudioFile[]>('cmd_list_wavs', { dir }),
   audioMeta: (path: string) => invoke<AudioFile>('cmd_audio_meta', { path }),
+  inspectSdCard: (selectedPath: string) =>
+    invoke<BackendSdCardReport>('cmd_inspect_sd_card', { selectedPath }).then(fromBackendSdCardReport),
   exitApp: () => invoke<void>('cmd_exit_app')
 };
 

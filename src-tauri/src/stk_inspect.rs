@@ -4,7 +4,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-const MAGIC: &[u8; 8] = b"VDK0PR \0";
+const OFFICIAL_MAGIC: &[u8; 4] = b"VDK0";
+const LEGACY_MAGIC: &[u8; 8] = b"VDK0PR \0";
+const HEADER_FILE_SIZE_ADJUSTMENT: usize = 360;
 const KTDT_TAG: &[u8; 4] = b"KTDT";
 const KTDT_SIZE: usize = 0x1084; // 4228
 const HEADER_SIZE: usize = 32;
@@ -43,7 +45,7 @@ fn tr(key: &str, locale: &str) -> String {
 	match key {
 		"err_not_found" => if fr { "Fichier introuvable".into() } else { "File not found".into() },
 		"err_empty" => if fr { "Fichier vide".into() } else { "File is empty".into() },
-		"err_magic" => if fr { "En-tête invalide — attendu 'VDK0PR \\0' (SmplTrek fw 3.2)".into() } else { "Invalid magic — expected 'VDK0PR \\0' (SmplTrek fw 3.2)".into() },
+		"err_magic" => if fr { "En-tête invalide — attendu 'VDK0' avec la taille officielle SmplTrek".into() } else { "Invalid header — expected official SmplTrek VDK0 layout".into() },
 		"err_header_fields" => if fr { "Champs fixes de l'en-tête invalides".into() } else { "Invalid fixed header fields".into() },
 		"err_truncated_header" => if fr { "Fichier tronqué — en-tête incomplet (32 octets attendus)".into() } else { "Truncated file — header incomplete (32 bytes expected)".into() },
 		"err_kdtd_tag" => if fr { "Tag KTDT manquant".into() } else { "Missing KTDT tag".into() },
@@ -70,6 +72,12 @@ fn read_le32(b: &[u8]) -> u32 {
 	u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }
 
+fn has_valid_header(data: &[u8]) -> bool {
+	let official = &data[0..4] == OFFICIAL_MAGIC
+		&& read_le32(&data[4..8]) == (data.len() - HEADER_FILE_SIZE_ADJUSTMENT) as u32;
+	official || &data[0..8] == LEGACY_MAGIC
+}
+
 pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 	let p = Path::new(path);
 	if !p.exists() {
@@ -92,7 +100,7 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 		errors.push(tr("err_truncated_header", locale));
 		header_ok = false;
 	} else {
-		if &data[0..8] != MAGIC {
+		if !has_valid_header(&data) {
 			errors.push(tr("err_magic", locale));
 			header_ok = false;
 		}
@@ -214,8 +222,11 @@ pub fn inspect(path: &str, locale: &str) -> Result<StkInspectReport, String> {
 		if audio.is_empty() {
 			errors.push(tr("err_no_data", locale));
 		} else {
-			// Count ISDT blocks
-			let isdt_count = audio.windows(4).filter(|w| w == b"ISDT").count();
+			// The first ISDT belongs to sample 1 but is embedded in KTDT; the
+			// remaining records live in the audio section before samples 2–15.
+			let embedded_first_isdt = &data[HEADER_SIZE + 4212..HEADER_SIZE + 4216] == b"ISDT";
+			let isdt_count = audio.windows(4).filter(|w| w == b"ISDT").count()
+				+ if embedded_first_isdt { 1 } else { 0 };
 			if isdt_count < 15 {
 				warnings.push(format!("{} (found {isdt_count}, expected 15)", tr("warn_isdt", locale)));
 			}

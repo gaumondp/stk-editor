@@ -1,12 +1,16 @@
 <svelte:options runes />
 
 <script lang="ts">
-	import { project, assignSample, clearSamples, moveOrSwapSample, removeSample } from '../stores/app';
+	import { project, assignSample, clearSamples, moveOrSwapSample, removeSample, setParam } from '../stores/app';
 	import type { Sample } from '../lib/commands';
 	import { onMount, tick } from 'svelte';
 	import { tr } from '../lib/i18n';
 	import { previewingPath, previewMuted, previewWav, setPreviewMuted, stopPreview } from '../lib/audio-preview';
 	import { padIdFromDropTarget } from '../lib/drop-target';
+	import PadParameterEditor from './PadParameterEditor.svelte';
+	import type { PadParameter } from '../lib/pad-parameters';
+
+	let { onReadSdCard = () => {} }: { onReadSdCard?: () => void } = $props();
 
 	const assignablePadIds = Array.from({ length: 15 }, (_, index) => index + 1);
 	const trackRows = [
@@ -33,6 +37,16 @@
 		}
 		return null;
 	});
+
+	// The sample bound to the parameter editor: the assignment on the currently
+	// selected pad, or undefined when no pad (or an empty pad) is selected.
+	const selectedSample = $derived(selectPad === null ? undefined : $project.kit.pads[selectPad]);
+
+	/** Commits an edited pad parameter only while a selected assigned pad is still current. */
+	function commitPadParameter(param: PadParameter, value: number) {
+		if (selectPad === null || !$project.kit.pads[selectPad]) return;
+		void setParam(selectPad, param, value);
+	}
 
 	onMount(() => {
 		const onKey = (event: KeyboardEvent) => handleGlobalKeyDown(event);
@@ -370,6 +384,7 @@
 					</div>
 				{/each}
 			</div>
+			<PadParameterEditor selectedPad={selectPad} sample={selectedSample} onCommit={commitPadParameter} />
 		</section>
 
 		<section class="physical-pad-section" aria-label="Physical pads">
@@ -382,6 +397,15 @@
 					</button>
 					<button class="pad-action suggestions" type="button" onclick={toggleSuggestedPadPositions} aria-pressed={showSuggestedPadPositions}>
 						{tr(showSuggestedPadPositions ? 'pad.hide_suggestions' : 'pad.show_suggestions')}
+					</button>
+					<button class="pad-action sd-reader-action" type="button" onclick={onReadSdCard}>
+						<svg class="sd-reader-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M16 3H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7z" />
+							<path d="M16 3v4" />
+							<path d="M12.5 6v2" />
+							<path d="M15 6v2" />
+						</svg>
+						<span>{tr('sd_reader.open')}</span>
 					</button>
 				</div>
 				<svg class="pads-svg" viewBox="0 0 700 220" role="group" aria-label="Physical pads" preserveAspectRatio="xMidYMid meet">
@@ -446,9 +470,12 @@
 	.pad-action.mute { display: flex; align-items: center; justify-content: center; gap: 4px; height: calc(3 * 1.2em + 14px); line-height: 1.2; }
 	.pad-action.mute.active { border-color: var(--warn, #f0ad4e); background: rgba(240, 173, 78, 0.15); }
 	.pad-action.suggestions { line-height: 1.2; }
+	.pad-action.sd-reader-action { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 24px; }
+	.sd-reader-icon { width: 16px; height: 16px; flex: 0 0 auto; }
 	:global(html[data-ui-scale='125']) .physical-pad-layout, :global(html[data-ui-scale='150']) .physical-pad-layout, :global(html[data-ui-scale='200']) .physical-pad-layout { flex-direction: column; }
 	:global(html[data-ui-scale='125']) .device-wrap, :global(html[data-ui-scale='150']) .device-wrap, :global(html[data-ui-scale='200']) .device-wrap { min-width: 680px; }
 	:global(html[data-ui-scale='125']) .pad-actions, :global(html[data-ui-scale='150']) .pad-actions, :global(html[data-ui-scale='200']) .pad-actions { order: 1; flex: 0 0 auto; flex-direction: row; width: 100%; }
+	:global(html[data-ui-scale='125']) .pad-action.sd-reader-action, :global(html[data-ui-scale='150']) .pad-action.sd-reader-action, :global(html[data-ui-scale='200']) .pad-action.sd-reader-action { margin-top: 0; margin-left: 24px; }
 	.pads-svg { display: block; flex: 1; min-width: 0; height: auto; }
 	.track-grid text { fill: var(--fg-dim, #9aa0a6); font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; pointer-events: none; user-select: none; -webkit-user-select: none; }
 	.track-grid .pad-number { fill: var(--fg, #e6e6e6); font-size: 28px; opacity: 0.11; pointer-events: none; }
@@ -465,5 +492,5 @@
 	.track-pad.previewing rect { animation: pulse 1s ease-in-out infinite; }
 	.pads-hint { min-height: 16px; margin-top: 8px; color: var(--fg-dim, #9aa0a6); font-size: 11px; text-align: center; }
 	@keyframes pulse { 50% { filter: brightness(1.5); } }
-	@media (max-width: 650px) { .assignment-list { grid-template-columns: 1fr; } .assignment-target { min-height: 32px; } .physical-pad-layout { flex-direction: column; } .pad-actions { flex-direction: row; flex-basis: auto; width: 100%; } }
+	@media (max-width: 650px) { .assignment-list { grid-template-columns: 1fr; } .assignment-target { min-height: 32px; } .physical-pad-layout { flex-direction: column; } .pad-actions { flex-direction: row; flex-basis: auto; width: 100%; } .pad-action.sd-reader-action { margin-top: 0; margin-left: 24px; } }
 </style>

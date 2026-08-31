@@ -120,7 +120,8 @@ for pad in prof.active_pads() {
 
 // ---------------------------------------------------------------------------
 
-const MAGIC: &[u8; 8] = b"VDK0PR \0";
+const MAGIC: &[u8; 4] = b"VDK0";
+const HEADER_FILE_SIZE_ADJUSTMENT: usize = 360;
 const KTDT_TAG: &[u8; 4] = b"KTDT";
 const KTDT_SIZE: usize = 0x1084; // 4228
 const ENTRY_SIZE: usize = 280;
@@ -141,6 +142,9 @@ fn build_stk(
 
       // --- Main header (32 bytes) ---
       out.extend_from_slice(MAGIC);
+      // Official factory kits store the final file length minus 360 here.
+      // It is patched after the variable-length audio section is assembled.
+      out.extend_from_slice(&[0u8; 4]);
       out.extend_from_slice(&[0u8; 4]);
       out.extend(&le32(0x10));
       out.extend_from_slice(KTDT_TAG);
@@ -197,6 +201,12 @@ fn build_stk(
         out.extend_from_slice(wav);
         }
       out.extend_from_slice(&[0u8, 0u8]);
+
+      let header_file_size = out
+          .len()
+          .checked_sub(HEADER_FILE_SIZE_ADJUSTMENT)
+          .ok_or("STK output is shorter than the official header adjustment")?;
+      out[4..8].copy_from_slice(&le32(header_file_size as u32));
 
       Ok(out)
 }
