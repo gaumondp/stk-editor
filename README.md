@@ -33,7 +33,7 @@ Ready-to-use builds are published on the **[Releases page](https://github.com/ga
 
 | Your computer | Download this file |
 | --- | --- |
-| **Mac** (Apple Silicon or Intel) | the `.dmg` file |
+| **Mac** (Apple Silicon or Intel) | the `.dmg` file — one build works on both |
 | **Windows 10 or 11** | the `.exe` installer |
 
 > **These are beta builds.** They work, but they are early: verify every kit you compile on your own SmplTrek before relying on it. If the Releases page has no files yet, the first version has not been tagged — until then you can [build the app from source](#build-from-source).
@@ -42,7 +42,7 @@ Ready-to-use builds are published on the **[Releases page](https://github.com/ga
 
 STK Forge is **not signed with an Apple certificate**, so macOS will refuse to open it the first time and say it cannot verify the developer. This is expected, and it is a statement about the certificate, not about the app. Here is how to allow it:
 
-1. Open the `.dmg` and drag **STK Forge** into your **Applications** folder.
+1. Open the downloaded `.dmg` and drag **STK Forge** into your **Applications** folder.
 2. Double-click **STK Forge**. macOS blocks it and shows a warning — click **Done**.
 3. Open the **Apple menu → System Settings → Privacy & Security**, and scroll down to **Security**.
 4. Click **Open Anyway** next to the message about STK Forge, then enter your password.
@@ -129,7 +129,7 @@ MIT. STK Forge is an independent project and is not affiliated with, endorsed by
 
 ### Build from source
 
-Requirements: Node.js 20+, pnpm 9+, Rust stable, and the platform build tools for Tauri.
+Requirements: Node.js 22+, pnpm 9+, Rust stable, and the platform build tools for Tauri.
 
 ```bash
 pnpm install

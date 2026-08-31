@@ -1,15 +1,28 @@
 # Builds the downloadable macOS and Windows binaries and attaches them to a
 # DRAFT GitHub Release. Nothing becomes public until you press Publish.
 #
-# Builds are UNSIGNED on purpose: signing costs an Apple Developer membership
-# and a Windows certificate, and this is an independent beta project. The consequence is
-# documented for users in README.md ("Download and install"). To sign later, add
-# the secrets below — the workflow already passes them through, so no rewrite is
-# needed:
+# The steps are explicit rather than delegated to tauri-apps/tauri-action: when
+# the macOS build failed there, the action reported only "failed with exit code
+# 1" and the underlying error was invisible in the job annotations. A named step
+# running the command with --verbose puts the real error in the log.
+#
+# CI is set explicitly below even though GitHub already sets it, because the .dmg
+# depends on it: Tauri passes --skip-jenkins to bundle_dmg.sh when CI is truthy,
+# which skips the AppleScript that arranges the Finder window. Without it the
+# build fails with "Apple event not authorized (-1743)" wherever Finder
+# automation is not permitted. Do not remove it.
+#
+# Builds are UNSIGNED on purpose: signing needs an Apple Developer membership and
+# a Windows certificate, and this is an independent beta project. The consequence
+# is documented for users in README.md ("Download and install"). To sign later,
+# add these secrets — they are already passed through, so no rewrite is needed:
 #   macOS   APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY,
 #           APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID
 #   Windows WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD
 name: Release
+
+env:
+  CI: true
 
 on:
   push:
@@ -18,39 +31,28 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
-    name: Build ${{ matrix.name }}
+  macos:
+    name: macOS (universal)
+    runs-on: macos-latest
     permissions:
-      # tauri-action creates the release and uploads the binaries.
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            name: macOS (universal)
-            args: --target universal-apple-darwin
-          - os: windows-latest
-            name: Windows
-            args: ''
-    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
       # setup-node must come AFTER pnpm/action-setup: its pnpm cache resolution
       # needs pnpm already on PATH.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -65,9 +67,33 @@ jobs:
           pnpm test
           cargo test --manifest-path src-tauri/Cargo.toml
 
-      # Builds the bundles, creates the draft release on the first runner to
-      # finish, and attaches this platform's artifacts to it.
-      - uses: tauri-apps/tauri-action@v1
+      # Builds the universal .app and the .dmg declared in tauri.conf.json.
+      # --verbose so a failure names the offending command in the log.
+      - name: Build the universal .app and .dmg
+        run: pnpm tauri build --target universal-apple-darwin --verbose
+
+      # Fails the job when the disk image is missing, rather than publishing a
+      # release with no macOS download.
+      - name: Confirm the .dmg exists
+        run: |
+          ls -la src-tauri/target/universal-apple-darwin/release/bundle/dmg/
+          test -n "$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name '*.dmg' -print -quit)"
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: STK Forge ${{ github.ref_name }} Beta
+          draft: true
+          prerelease: true
+          body: |
+            Beta build. Verify every kit you compile on the exact SmplTrek
+            hardware and firmware you intend to use.
+
+            **These builds are not code-signed.** macOS and Windows warn you the
+            first time you open the app — see "Download and install" in the
+            README for the exact steps.
+          files: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -76,16 +102,51 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        with:
-          tagName: v__VERSION__
-          releaseName: STK Forge v__VERSION__ Beta
-          releaseBody: |
-            Beta build. Verify every output on the exact SmplTrek hardware
-            and firmware you intend to use.
 
-            **These builds are not code-signed.** macOS and Windows will warn you
-            the first time you open the app — see "Download and install" in the
-            README for the exact steps.
-          releaseDraft: true
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify before publishing
+        run: |
+          pnpm check
+          pnpm test
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      # Produces the NSIS installer declared in tauri.conf.json.
+      - name: Build the installer
+        run: pnpm tauri build --verbose
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: STK Forge ${{ github.ref_name }} Beta
+          draft: true
           prerelease: true
-          args: ${{ matrix.args }}
+          files: src-tauri/target/release/bundle/nsis/*.exe
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}

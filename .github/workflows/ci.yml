@@ -18,17 +18,17 @@ jobs:
     name: Frontend (types, format, unit, e2e)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
       # setup-node must come AFTER pnpm/action-setup: its pnpm cache resolution
       # needs pnpm already on PATH.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -50,7 +50,7 @@ jobs:
 
       # Kept only on failure: the HTML report is what makes a red e2e run
       # diagnosable without reproducing it locally.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -61,7 +61,7 @@ jobs:
     name: Rust (clippy, tests)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Tauri's Linux build needs the system webview even to compile the tests.
       - name: Install Linux build dependencies
@@ -93,13 +93,10 @@ jobs:
         include:
           - os: macos-latest
             name: macOS (universal)
-            # --bundles app deliberately skips the .dmg here. Building a disk
-            # image runs an AppleScript that positions the icons in the Finder
-            # window, which needs Automation permission and fails with error
-            # -1743 in a restricted session. That step is cosmetic, so this
-            # per-commit gate does not depend on it; release.yml builds the real
-            # .dmg, where a failure is meaningful and must be visible.
-            args: --bundles app --target universal-apple-darwin
+            # Builds the .app and the .dmg. The disk image works here because
+            # GitHub sets CI, which makes Tauri pass --skip-jenkins to
+            # bundle_dmg.sh and skip the Finder-arranging AppleScript.
+            args: --target universal-apple-darwin
           - os: windows-latest
             name: Windows
             # No override: this really does produce the .exe installer, which is
@@ -107,15 +104,15 @@ jobs:
             args: ''
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable

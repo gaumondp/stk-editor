@@ -11,20 +11,36 @@ Releases are built by GitHub Actions, not by hand. See
 
 ## What is automated
 
-Pushing a `v*` tag runs the release workflow, which for macOS (universal
-`aarch64` + `x86_64`) and Windows:
+Pushing a `v*` tag runs the release workflow. Two independent jobs, one per
+platform, each of which:
 
 1. Re-runs `pnpm check`, `pnpm test` and the Rust test suite — a tag never ships
    code that fails the gates.
-2. Builds the bundles with `tauri-apps/tauri-action`.
-3. Creates a **draft** GitHub Release marked as a pre-release and attaches the
-   `.dmg` and the `.exe` installer to it.
+2. Builds its platform's artifact.
+3. Attaches it to a **draft** GitHub Release marked as a pre-release.
+
+| Platform | Artifact | How |
+| --- | --- | --- |
+| macOS | `.dmg` | universal `aarch64` + `x86_64` disk image |
+| Windows | `.exe` | the NSIS installer declared in `tauri.conf.json` |
 
 Nothing becomes public until you open the draft and press **Publish release**.
 
+### Why the steps are explicit
+
+An earlier version delegated everything to `tauri-apps/tauri-action`. The macOS
+job failed there and the action reported only `failed with exit code 1`; the
+underlying error was not in the job annotations, and Actions logs cannot be read
+without signing in. Named steps running the command with `--verbose` put the real
+error in the log instead.
+
+The workflow also sets `CI: true` explicitly, even though GitHub already does.
+That variable is what makes Tauri skip the disk image's Finder AppleScript — see
+"Building a `.dmg` locally" below. Removing it breaks the macOS release.
+
 Ordinary pushes and pull requests are covered separately by
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml), which runs all the
-verification gates and confirms both platforms still build.
+verification gates and confirms both platforms still build, disk image included.
 
 ## Builds are unsigned
 
@@ -93,8 +109,9 @@ git push origin v0.1.1
 ```
 
 The workflow starts on the tag. When both platform jobs finish, open the draft
-release, check that a `.dmg` and an `.exe` are attached, edit the notes, and
-publish.
+release and check that it carries the macOS `.dmg` and the Windows `.exe`. Both
+jobs fail loudly when their artifact is missing, so a release can never ship
+without a download. Edit the notes, then publish.
 
 ## Hotfix
 
@@ -111,24 +128,28 @@ Read the first failing step, not the last. The most common causes:
 | Symptom | Cause |
 | --- | --- |
 | No `.exe` attached | `bundle.targets` in `tauri.conf.json` lost its `nsis` entry |
-| macOS job fails on target | The `universal-apple-darwin` toolchain targets were not installed |
+| No `.dmg` attached | Usually `CI` is no longer set, so the Finder AppleScript ran and failed — see below |
 | Gate step fails | The tag was cut from a commit that does not pass CI — fix on a branch and re-tag |
 
 ## Building a `.dmg` locally
 
-`pnpm tauri build` produces the disk image by running an AppleScript that
-arranges the icons in the Finder window. If your terminal has not been granted
-Automation access to Finder, that step fails with:
+`pnpm tauri build` arranges the icons in the disk image's Finder window with an
+AppleScript. If your terminal has not been granted Automation access to Finder,
+that step fails and takes the whole build with it:
 
 ```
 execution error: Apple event not authorized (-1743)
 Failed running AppleScript
 ```
 
-The build itself is fine — only the cosmetic layout step is blocked. Grant the
-permission under **System Settings → Privacy & Security → Automation**, allowing
-your terminal (or IDE) to control **Finder**, then run the build again. To skip
-the disk image entirely while developing, use `pnpm tauri build --bundles app`.
+Set `CI=true` and the problem disappears — Tauri then passes `--skip-jenkins` to
+`bundle_dmg.sh`, which skips the cosmetic AppleScript entirely:
 
-The release workflow builds the real `.dmg` on a GitHub runner, so this local
-permission is not required to publish.
+```bash
+CI=true pnpm tauri build --target universal-apple-darwin
+```
+
+That is exactly how the release workflow builds it, which is why the disk image
+it produces is not affected by any local permission. The alternative is to grant
+the permission under **System Settings → Privacy & Security → Automation**,
+allowing your terminal or IDE to control **Finder**.

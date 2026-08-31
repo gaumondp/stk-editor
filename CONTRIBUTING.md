@@ -4,7 +4,7 @@ Thanks for helping improve STK Forge, a local desktop editor for Sonicware `.stk
 
 ## Setup
 
-- Node.js 20+
+- Node.js 22+
 - pnpm 9+
 - Rust stable (with the platform build tools Tauri needs)
 
