@@ -221,7 +221,7 @@ pub fn migrate(mut project: Project) -> Result<Project, String> {
           ));
        }
       // S02: backfill originalFileName if missing
-      for (_, s) in project.kit.pads.iter_mut() {
+      for s in project.kit.pads.values_mut() {
         if s.original_file_name.is_none() && !s.file_name.is_empty() {
           s.original_file_name = Some(s.file_name.clone());
         }
@@ -233,7 +233,7 @@ pub fn migrate(mut project: Project) -> Result<Project, String> {
 /// dirs, then keep original_path (§10.4).
 pub fn resolve_missing(project: &mut Project, project_path: &str) {
        let base = PathBuf::from(project_path);
-      for (_pad, s) in project.kit.pads.iter_mut() {
+      for s in project.kit.pads.values_mut() {
         if s.file_name.is_empty() {
           continue;
             }
@@ -317,7 +317,7 @@ pub fn search_candidates(name: &str, base: &Path, expected_sha256: Option<&str>)
 pub fn find_missing(project: &mut Project, project_path: &str) -> Result<FindMissingReport, String> {
        let mut report = FindMissingReport::default();
       resolve_missing(project, project_path);
-      for (_pad, s) in project.kit.pads.iter() {
+      for s in project.kit.pads.values() {
         if s.file_name.is_empty() { continue; }
          let ok = s.resolved_path.as_ref().map(|p| Path::new(p).exists()).unwrap_or(false);
         report.items.push(FindMissingItem {
@@ -590,7 +590,7 @@ pub fn list_wavs(dir: &str) -> Result<Vec<AudioFile>, String> {
           out.push(describe_audio(&p));
             }
          }
-      out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+      out.sort_by_key(|f| f.name.to_lowercase());
       Ok(out)
 }
 
