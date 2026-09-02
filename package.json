@@ -1,6 +1,6 @@
 {
   "name": "stk-forge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "STK Forge: create, edit, save and compile Sonicware STK kits; actively tested with SmplTrek firmware 3.2.",
   "type": "module",
   "license": "MIT",
