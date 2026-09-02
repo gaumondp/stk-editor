@@ -29,12 +29,14 @@ STK Forge creates editable JSON companions, compiles `.stk` kits, inspects compi
 
 ## Download and install
 
-Ready-to-use builds are published on the **[Releases page](https://github.com/gaumondp/stk-forge/releases)** of this repository. You do not need any developer tools to install them.
+Ready-to-use builds are published on the **[latest release](https://github.com/gaumondp/stk-forge/releases/latest)** of this repository. You do not need any developer tools to install them. On the release page, expand the **Assets** section to see the downloads.
 
 | Your computer | Download this file |
 | --- | --- |
-| **Mac** (Apple Silicon or Intel) | the `.dmg` file — one build works on both |
+| **Mac** (Apple Silicon or Intel) | the `.dmg` file — one universal build |
 | **Windows 10 or 11** | the `.exe` installer |
+
+The Mac build is *universal*: the same `.dmg` is meant to run on both Apple Silicon and Intel Macs. It is actively tested on Apple Silicon; Intel is expected to work but has not been verified.
 
 > **These are beta builds.** They work, but they are early: verify every kit you compile on your own SmplTrek before relying on it. If the Releases page has no files yet, the first version has not been tagged — until then you can [build the app from source](#build-from-source).
 
@@ -115,6 +117,15 @@ The implementation is based on reverse-engineered SmplTrek kit behavior; the exa
 - The current device profile is structurally specific to **SmplTrek firmware 3.2**.
 - Compiling and exporting never overwrite an input `.stk` or WAV file. Overwrite prompts apply only to a selected output destination.
 - A successful compile is not proof of compatibility with untested firmware or hardware. Test on non-critical media before relying on a kit.
+
+## Feedback and issues
+
+STK Forge is in beta, and your reports are the fastest way it improves. Please use the repository's **[Issues](https://github.com/gaumondp/stk-forge/issues)** — not email or private messages — for everything:
+
+- **Found a bug?** Open a [bug report](https://github.com/gaumondp/stk-forge/issues/new?template=bug_report.md). Include your STK Forge version (in the About dialog), your operating system, and the steps to reproduce it.
+- **Want a feature?** Open a [feature request](https://github.com/gaumondp/stk-forge/issues/new?template=feature_request.md) and describe what you are trying to do.
+
+Filing it as an issue keeps every report visible, searchable, and trackable to a fix — a note that reaches only one person helps no one else who hits the same thing.
 
 ## Attribution
 
