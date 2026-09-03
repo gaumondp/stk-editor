@@ -68,10 +68,10 @@ describe('commands types', () => {
 			sampleRate: 48000,
 			channels: 1 as const,
 			bits: 16 as const,
-			compatible: true,
+			status: 'ready' as const,
 			modified: Date.now() / 1000
 		};
-		expect(af.compatible).toBe(true);
+		expect(af.status).toBe('ready');
 		expect(af.sampleRate).toBe(48000);
 	});
 });

@@ -85,9 +85,51 @@ export interface AudioFile {
 	sampleRate: number;
 	channels: number;
 	bits: number;
-	compatible: boolean;
+	/**
+	 * Read-analysis compatibility with the SmplTrek target format:
+	 * - `ready`: already 48 kHz / 16-bit, copied untouched on compile
+	 * - `convertible`: readable but a different format, converted on compile
+	 * - `unreadable`: cannot be decoded (corrupt, compressed, non-PCM)
+	 */
+	status: WavStatus;
 	warning?: string;
 	modified?: number;
+}
+
+/** The three read-analysis states a WAV can have (see {@link AudioFile.status}). */
+export type WavStatus = 'ready' | 'convertible' | 'unreadable';
+
+/** A pad whose assigned WAV could not be compiled (from a refused compile). */
+export interface UnreadablePad {
+	pad: number;
+	fileName: string;
+	reason: string;
+}
+
+/**
+ * Sentinel prefix the Rust `cmd_compile` puts on its error string when it
+ * refused the build only because some pads are unreadable and `skipUnreadable`
+ * was false. The remainder is a JSON array of {@link UnreadablePad}.
+ */
+export const UNREADABLE_PADS_PREFIX = 'UNREADABLE_PADS:';
+
+/**
+ * If `err` is a refused-compile error listing unreadable pads, return the parsed
+ * pad list; otherwise return `null` (a real error the caller should surface).
+ *
+ * @param err The error thrown by {@link api.compile}.
+ */
+export function parseUnreadablePads(err: unknown): UnreadablePad[] | null {
+	const msg = String(err);
+	const at = msg.indexOf(UNREADABLE_PADS_PREFIX);
+	if (at === -1) return null;
+	try {
+		const json = msg.slice(at + UNREADABLE_PADS_PREFIX.length);
+		const parsed = JSON.parse(json);
+		return Array.isArray(parsed) ? (parsed as UnreadablePad[]) : null;
+	} catch {
+		return null;
+	}
 }
 
 export interface RecentEntry {
@@ -373,9 +415,15 @@ export const api = {
 	/** Returns candidate replacement paths for a missing file. @param fileName File name to match. @param basePath Search root. @param sha256 Optional content hash to prefer exact matches. */
 	searchCandidates: (fileName: string, basePath: string, sha256?: string | null) =>
 		invoke<string[]>('cmd_search_candidates', { fileName, basePath, sha256 }),
-	/** Compiles a project into a device STK file. @param project The project. @param outputPath Output STK path. @param mono Whether to render mono. @param overwrite Whether to overwrite an existing file. */
-	compile: (project: Project, outputPath: string, mono: boolean, overwrite: boolean) =>
-		invoke<CompileReport>('cmd_compile', { project: toBackendProject(project), outputPath, mono, overwrite }),
+	/** Compiles a project into a device STK file. @param project The project. @param outputPath Output STK path. @param mono Whether to render mono. @param overwrite Whether to overwrite an existing file. @param skipUnreadable When false, an unreadable pad refuses the compile and its pads are returned via an {@link UNREADABLE_PADS_PREFIX}-tagged error; when true, those pads compile as silence. */
+	compile: (project: Project, outputPath: string, mono: boolean, overwrite: boolean, skipUnreadable = false) =>
+		invoke<CompileReport>('cmd_compile', {
+			project: toBackendProject(project),
+			outputPath,
+			mono,
+			overwrite,
+			skipUnreadable
+		}),
 	/** Exports a project to a directory. @param project The project. @param opts Export options (base dir, profile, copy flag). */
 	export: (project: Project, opts: ExportOptions) =>
 		invoke<ExportReport>('cmd_export', { project: toBackendProject(project), opts }),

@@ -9,6 +9,8 @@ STK Forge creates editable JSON companions, compiles `.stk` kits, inspects compi
 
 ![Status](https://img.shields.io/badge/status-beta-yellow) ![Tauri](https://img.shields.io/badge/Tauri-2-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
+> **What's new:** see the [CHANGELOG](CHANGELOG.md) for the latest additions and fixes in every release.
+
 
 ## What it does
 
@@ -172,6 +174,20 @@ Every push runs these gates on Linux and verifies that macOS and Windows still b
 STK Forge reads RIFF/WAVE files with PCM samples at 8-, 16-, 24-, or 32-bit depth, plus IEEE floating-point samples at 32- or 64-bit depth. The parser accepts standard `fmt ` and `data` chunks and safely ignores unrelated RIFF chunks such as `LIST`, `cue`, and `fact`.
 
 The Audio Explorer and assigned pads use one local preview player, with a shared volume slider and mute state. Source files remain unchanged. During compilation, supported source audio is normalized to the SmplTrek target format: 48 kHz, 16-bit linear PCM, mono or stereo according to the selected compile option.
+
+#### WAV compatibility
+
+Every WAV in the Audio Explorer carries a colored status pill, and a legend beneath the column options explains the code:
+
+| Pill | Meaning |
+| --- | --- |
+| 🟢 **Ready** | Already 48 kHz / 16-bit. Copied to the device untouched. |
+| 🟡 **Will be converted** | Readable but a different sample rate or bit depth. Converted to the target format when the kit is compiled. |
+| 🔴 **Incompatible** | Cannot be decoded — a corrupt file, or a compressed / non-PCM format (ADPCM, µ-law, and similar are rejected on purpose rather than decoded to noise). |
+
+The pill reflects a **read analysis of the file's header**, not a guarantee that conversion will succeed. In the rare case a file reads as convertible but its audio data cannot be decoded at compile time, compilation catches it: a dialog names each pad whose WAV could not be compiled and lists the pads that would be left empty, then offers **Compile without them** (the proposed file name gains an `-incomplete` suffix so the result is obvious) or **Cancel**.
+
+**Your source files are never modified.** Conversion happens entirely in memory and is written only into the compiled `.stk` (or the SD-card export). The original WAV files on disk are read, never written — an invariant enforced by an automated test that checks each source file is byte-for-byte identical after a compile.
 
 ### The current STK implementation
 

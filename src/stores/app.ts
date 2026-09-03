@@ -3,6 +3,7 @@
 import { writable, get } from 'svelte/store';
 import {
 	api,
+	parseUnreadablePads,
 	type Project,
 	type RecentStore,
 	type ValidationResult,
@@ -241,11 +242,16 @@ export async function saveAs(p = get(project)): Promise<string | null> {
  * @param overwrite Whether to overwrite an existing file. Defaults to `false`.
  * @returns The compile report, or `null` when compilation failed.
  */
-export async function compileKit(outputPath: string, mono = true, overwrite = false): Promise<CompileReport | null> {
+export async function compileKit(
+	outputPath: string,
+	mono = true,
+	overwrite = false,
+	skipUnreadable = false
+): Promise<CompileReport | null> {
 	const p = get(project);
 	status.update((_s) => ({ id: 'compiling', label: 'Compiling…', kind: 'compiling' }));
 	try {
-		const report = await api.compile(p, outputPath, mono, overwrite);
+		const report = await api.compile(p, outputPath, mono, overwrite, skipUnreadable);
 		status.update((_s) => ({ id: 'compile_ok', label: 'Compilation succeeded', kind: 'compile_ok' }));
 		p.compile = {
 			last_compiled: new Date().toISOString(),
@@ -257,6 +263,13 @@ export async function compileKit(outputPath: string, mono = true, overwrite = fa
 		notifySuccess(`${report.pads_filled} pads → ${report.bytes} B`);
 		return report;
 	} catch (e) {
+		// A refused compile listing unreadable pads is not a failure to toast:
+		// the caller shows a modal and may retry with skipUnreadable=true. Let
+		// it propagate untouched so the caller can detect it. Leave the status
+		// as-is; the caller drives the next state.
+		if (parseUnreadablePads(e)) {
+			throw e;
+		}
 		status.update((_s) => ({ id: 'compile_error', label: 'Compilation failed', kind: 'compile_error' }));
 		notifyError(String(e));
 		return null;

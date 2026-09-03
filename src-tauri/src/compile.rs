@@ -18,18 +18,47 @@ pub struct CompileOptions {
      /// Compile samples to mono (true) or stereo (false).
      pub mono: bool,
      /// Overwrite `output_path` if it already exists.
-     pub overwrite: bool
+     pub overwrite: bool,
+     /// When false (the default), a pad whose source WAV cannot be read aborts
+     /// the compile: nothing is written and the unreadable pads are returned so
+     /// the user can decide. When true, those pads are compiled as silence
+     /// (left empty on the device) and the `.stk` is written.
+     #[serde(default)]
+     pub skip_unreadable: bool
 }
 impl CompileOptions {
-     /// Build options for `output_path` with the safe defaults: mono, no overwrite.
+     /// Build options for `output_path` with the safe defaults: mono, no overwrite,
+     /// abort on any unreadable pad.
      pub fn new(output_path: &str) -> Self {
        Self {
          output_path: output_path.to_string(),
          mono: true,
-         overwrite: false
+         overwrite: false,
+         skip_unreadable: false
        }
       }
 }
+
+/// A pad whose assigned WAV could not be read/decoded at compile time.
+///
+/// Serialized to the frontend (camelCase: `pad`, `fileName`, `reason`) so the
+/// user can be shown exactly which pads would be left empty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnreadablePad {
+     /// 1-based pad number on the device.
+     pub pad: u8,
+     /// The assigned source file name.
+     pub file_name: String,
+     /// Human-readable reason the WAV could not be compiled.
+     pub reason: String
+}
+
+/// Sentinel prefix on the error string returned by [`compile`] when the build
+/// was refused solely because one or more pads are unreadable and
+/// `skip_unreadable` was false. The remainder of the string is a JSON array of
+/// [`UnreadablePad`]. The frontend detects this prefix to show its modal.
+pub const UNREADABLE_PADS_PREFIX: &str = "UNREADABLE_PADS:";
 
 /// Outcome of a successful compile.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -83,7 +112,20 @@ pub fn validate(project: &Project) -> ValidationResult {
 /// normalized to 48 kHz/16-bit, empty pads synthesized as silence), assembles
 /// the header + KTDT + audio section, and writes it atomically via a temp file.
 /// Returns a [`CompileReport`]; errors on validation failure, an existing
-/// output when `overwrite` is false, a missing source sample, or any I/O error.
+/// output when `overwrite` is false, or any I/O error.
+///
+/// SOURCE-FILE INVARIANT: this function only ever READS the source WAV files
+/// (in `resolve_source` + `compile_wav`, via `wav::normalize`, which reads the
+/// bytes into memory). It never opens a source WAV for writing. All output is
+/// written exclusively to `opts.output_path` (the `.stk`). The source files a
+/// user assigned to pads are guaranteed untouched. This is locked by the
+/// `compile_never_mutates_source_wavs` test.
+///
+/// Unreadable pads: a pad whose assigned WAV cannot be decoded does NOT abort
+/// silently. When `opts.skip_unreadable` is false the compile is refused with
+/// no file written, returning a [`UNREADABLE_PADS_PREFIX`]-tagged JSON list of
+/// the offending pads. When true, those pads compile as silence (empty on the
+/// device) and the `.stk` is written.
 pub fn compile(project: &Project, opts: &CompileOptions) -> Result<CompileReport, String> {
       let prof = known_profile(&project.device.profile, &project.device.firmware)?;
 
@@ -100,21 +142,48 @@ pub fn compile(project: &Project, opts: &CompileOptions) -> Result<CompileReport
       // Build WAVs per active pad; the .stk container has exactly 15 audio slots.
       let mut wavs: Vec<(Vec<u8>, String)> = Vec::new();
       let mut filled = 0usize;
+      let mut unreadable: Vec<UnreadablePad> = Vec::new();
       let active_pad_count = prof.active_pads().len();
 
-for pad in prof.active_pads() {
+      for pad in prof.active_pads() {
         let sample = project.kit.pads.get(&(pad as u8)).cloned().unwrap_or_default();
         let file_name = sample.file_name.clone();
         let is_filled = !file_name.is_empty();
         let wav_bytes = match resolve_source(sample) {
-          Ok(Some(p)) => compile_wav(&p, opts.mono)?,
-           Ok(None) => synth_silence(opts.mono),
-              Err(e) => return Err(format!("Pad {pad}: {e}")),
-               };
+          Ok(Some(p)) => match compile_wav(&p, opts.mono) {
+            Ok(bytes) => bytes,
+            // The source is present but its bytes cannot be decoded (corrupt,
+            // compressed, non-PCM, unknown depth). Record the pad instead of
+            // aborting the whole build, and stand in silence so the layout
+            // stays valid if the user later chooses to compile without it.
+            Err(e) => {
+              unreadable.push(UnreadablePad {
+                pad: pad as u8,
+                file_name: file_name.clone(),
+                reason: e
+              });
+              synth_silence(opts.mono)
+            }
+          },
+          Ok(None) => synth_silence(opts.mono),
+          // A missing file (not on disk) is a hard error, not an unreadable
+          // pad: it is a broken reference the user must relink, distinct from
+          // a present-but-undecodable WAV.
+          Err(e) => return Err(format!("Pad {pad}: {e}")),
+        };
         wavs.push((wav_bytes, file_name));
         if is_filled {
           filled += 1;
           }
+        }
+
+      // If any pad is unreadable and the caller did not opt to skip them,
+      // refuse the build entirely: write nothing, hand back the list so the
+      // frontend can name each empty pad and let the user decide.
+      if !unreadable.is_empty() && !opts.skip_unreadable {
+        let json = serde_json::to_string(&unreadable)
+          .unwrap_or_else(|_| "[]".to_string());
+        return Err(format!("{UNREADABLE_PADS_PREFIX}{json}"));
         }
 
        while wavs.len() < active_pad_count {
@@ -131,11 +200,21 @@ for pad in prof.active_pads() {
       std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
       std::fs::rename(&tmp, out).map_err(|e| e.to_string())?;
 
+      let mut warnings = v.warnings;
+      // Surface the skipped pads as compile warnings so the report reflects
+      // that the written .stk has empty pads by the user's choice.
+      for u in &unreadable {
+        warnings.push(format!(
+          "Pad {} left empty: '{}' could not be compiled ({})",
+          u.pad, u.file_name, u.reason
+        ));
+      }
+
       Ok(CompileReport {
         output_path: opts.output_path.clone(),
         bytes: bytes.len() as u64,
-        pads_filled: filled,
-        warnings: v.warnings
+        pads_filled: filled.saturating_sub(unreadable.len()),
+        warnings
        })
 }
 

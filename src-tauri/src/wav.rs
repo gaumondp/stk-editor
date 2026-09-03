@@ -48,6 +48,7 @@ fn parse_wav(bytes: &[u8]) -> Result<Parsed, String> {
       let mut kind = SampleKind::Pcm;
       let mut data: Vec<u8> = Vec::new();
       let mut found_data = false;
+      let mut found_fmt = false;
 
        while i + 8 <= bytes.len() {
        let id = &bytes[i..i + 4];
@@ -79,7 +80,30 @@ fn parse_wav(bytes: &[u8]) -> Result<Parsed, String> {
           if let Some(v) = read_le_u16(body, 14) {
            bits = v;
              }
-          kind = if audio_format == 3 { SampleKind::Float } else { SampleKind::Pcm };
+          // Only linear PCM (1) and IEEE float (3) are decodable. Anything
+          // else — ADPCM, µ-law/A-law, MP3-in-WAV, other compressed tags —
+          // would be silently misread as PCM garbage. Reject it explicitly so
+          // the file is reported unreadable, never decoded to noise.
+          // WAVE_FORMAT_EXTENSIBLE (0xFFFE) carries the real format tag in the
+          // first two bytes of its SubFormat GUID, at offset 24 of the fmt body.
+          let effective_format = if audio_format == 0xFFFE {
+            match read_le_u16(body, 24) {
+              Some(sub) => sub,
+              None => return Err(
+                "WAVE_FORMAT_EXTENSIBLE without a readable SubFormat".into()
+              ),
+            }
+          } else {
+            audio_format
+          };
+          match effective_format {
+            1 => kind = SampleKind::Pcm,
+            3 => kind = SampleKind::Float,
+            other => return Err(format!(
+              "unsupported WAV format tag: {other} (compressed or non-PCM)"
+            )),
+          }
+          found_fmt = true;
           }
         b"data" => {
           data = body.to_vec();
@@ -94,6 +118,9 @@ fn parse_wav(bytes: &[u8]) -> Result<Parsed, String> {
         };
         }
 
+      if !found_fmt {
+        return Err("no fmt chunk in WAV".into());
+        }
       if !found_data {
         return Err("no data chunk in WAV".into());
         }
@@ -198,6 +225,11 @@ pub fn parse_wav_for_inspect(bytes: &[u8]) -> Result<AudioInfo, String> {
 
 /// Read a WAV and return interleaved 16-bit PCM frames + info, normalizing to
 /// 48 kHz / 16-bit PCM. `mono` selects the final channel count (1 or 2).
+///
+/// SOURCE-FILE INVARIANT: the source file at `path` is only ever READ
+/// (`std::fs::read`). This function never writes to it. The normalized samples
+/// are returned to the caller (the compiler embeds them in the `.stk`); the
+/// original WAV on disk is guaranteed untouched.
 pub fn normalize(path: &Path, mono: bool) -> Result<(Vec<i16>, AudioInfo), String> {
       let bytes = std::fs::read(path).map_err(|e| path_err(path, e))?;
       let parsed = parse_wav(&bytes)?;

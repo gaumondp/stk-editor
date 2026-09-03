@@ -163,16 +163,61 @@
 				const key = report.valid ? 'compile.overwrite' : 'compile.overwrite_invalid';
 				if (!(await ask(tr(key, { path: out as string }), { title: tr('compile.title') }))) return;
 			}
-			const report: CompileReport | null = await compileKit(out as string, true, true);
+			await compileAt(out as string, true);
+		} catch (e) {
+			const message = `${tr('status.compile_error')}: ${String(e)}`;
+			status.update(() => ({ id: 'compile_error', label: tr('status.compile_error'), kind: 'compile_error' }));
+			error(message);
+		}
+	}
+
+	/**
+	 * Compile to `outputPath`. If the build is refused because some pads are
+	 * unreadable, show a modal naming each pad that would be left empty and, on
+	 * confirmation, recompile with those pads skipped to a `-incomplete` file.
+	 *
+	 * @param outputPath Destination `.stk` path.
+	 * @param overwrite Whether to overwrite an existing file.
+	 */
+	async function compileAt(outputPath: string, overwrite: boolean) {
+		const { parseUnreadablePads } = await import('../lib/commands');
+		try {
+			const report: CompileReport | null = await compileKit(outputPath, true, overwrite, false);
 			if (report) {
 				status.update(() => ({ id: 'compile_ok', label: tr('status.compile_ok'), kind: 'compile_ok' }));
 				success(`${report.pads_filled} pads · ${report.bytes} B`);
 				if (report.warnings.length) error(report.warnings.join('; '));
 			}
 		} catch (e) {
-			const message = `${tr('status.compile_error')}: ${String(e)}`;
-			status.update(() => ({ id: 'compile_error', label: tr('status.compile_error'), kind: 'compile_error' }));
-			error(message);
+			const pads = parseUnreadablePads(e);
+			if (!pads) throw e;
+			// Refused compile: name each unreadable pad and the pads that would
+			// be left empty, then let the user compile without them.
+			const padList = pads.map((p) => p.pad).join(', ');
+			const lines = pads.map((p) =>
+				tr('compile.unreadable.padLine', { pad: p.pad, file: p.fileName, reason: p.reason })
+			);
+			const body = `${lines.join('\n')}\n\n${tr('compile.unreadable.emptyPads', { pads: padList })}`;
+			const proceed = await ask(body, {
+				title: tr('compile.unreadable.title'),
+				okLabel: tr('compile.unreadable.compileWithout'),
+				cancelLabel: tr('compile.unreadable.cancel')
+			});
+			if (!proceed) return;
+			// Make the incomplete result obvious in the file picker default name.
+			const base = outputPath.replace(/\.stk$/i, '');
+			const incomplete = `${base}-incomplete.stk`;
+			const target = await save({
+				defaultPath: incomplete,
+				filters: [{ name: 'SmplTrek Kit', extensions: ['stk'] }]
+			});
+			if (!target) return;
+			const report = await compileKit(target as string, true, true, true);
+			if (report) {
+				status.update(() => ({ id: 'compile_ok', label: tr('status.compile_ok'), kind: 'compile_ok' }));
+				success(`${report.pads_filled} pads · ${report.bytes} B`);
+				if (report.warnings.length) error(report.warnings.join('; '));
+			}
 		}
 	}
 

@@ -392,11 +392,17 @@ pub fn validate_project(project: &Project) -> ValidationResult {
 // ── Compile / Export (spec §12, §13) ───────────────────────────────────────
 
 /// Compile a project to a `.stk` file at `output_path` (see [`compile::compile`]).
-pub fn compile_to_stk(project: &Project, output_path: &str, mono: bool, overwrite: bool) -> Result<CompileReport, String> {
+///
+/// `skip_unreadable`: when false (default), a pad whose WAV cannot be decoded
+/// aborts the compile and the unreadable pads are returned (see
+/// [`compile::UNREADABLE_PADS_PREFIX`]); when true, those pads are written as
+/// silence and the `.stk` is produced.
+pub fn compile_to_stk(project: &Project, output_path: &str, mono: bool, overwrite: bool, skip_unreadable: bool) -> Result<CompileReport, String> {
        let opts = CompileOptions {
         output_path: output_path.to_string(),
         mono,
-        overwrite
+        overwrite,
+        skip_unreadable
          };
       compile::compile(project, &opts)
 }
@@ -468,7 +474,8 @@ fn export_compile_temp_stk(
       let report = compile::compile(project, &CompileOptions {
         output_path: tmp_stk.to_string_lossy().into_owned(),
         mono: true,
-        overwrite: true
+        overwrite: true,
+        skip_unreadable: false
         })
       .map_err(|e| format!("STK compile failed: {e}"))?;
       Ok((tmp_stk, report))
@@ -594,6 +601,23 @@ pub fn list_wavs(dir: &str) -> Result<Vec<AudioFile>, String> {
       Ok(out)
 }
 
+/// Read-analysis compatibility of a WAV against the device target format.
+///
+/// Computed from the `fmt ` header only (fast). `Unreadable` is the Default so
+/// that a file whose metadata cannot even be read is never mistaken for
+/// compatible.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum WavStatus {
+      /// Already 48 kHz / 16-bit: copied to the device untouched on compile.
+      Ready,
+      /// Readable but a different format: will be converted on compile.
+      Convertible,
+      /// Cannot be decoded (corrupt, compressed, non-PCM, unknown depth).
+      #[default]
+      Unreadable
+}
+
 /// A WAV file described for the picker, with device-compatibility flags.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -614,8 +638,10 @@ pub struct AudioFile {
       pub channels: u16,
       /// Bit depth.
       pub bits: u16,
-      /// True when already 48 kHz / 16-bit (no conversion needed on compile).
-      pub compatible: bool,
+      /// Read-analysis compatibility status: `ready` (already 48 kHz/16-bit),
+      /// `convertible` (readable, will be converted on compile), or
+      /// `unreadable` (cannot be decoded). Serialized camelCase as `status`.
+      pub status: WavStatus,
       /// Optional human-readable compatibility warning.
       pub warning: Option<String>,
       /// Last-modified time as Unix seconds, if available.
@@ -650,17 +676,19 @@ fn describe_audio(path: &Path) -> AudioFile {
           f.sample_rate = info.sample_rate;
           f.channels = info.channels;
           f.bits = info.bits;
-f.compatible = (info.sample_rate == 48000) && (info.bits == 16);
-            if info.bits != 16 {
-              f.warning = Some(format!("{}-bit", info.bits));
-            } else if !f.compatible {
-              f.warning = Some("will be converted to 48 kHz / 16-bit on compile".to_string());
-            } else {
-              f.warning = None;
-            }
+          if info.sample_rate == 48000 && info.bits == 16 {
+            f.status = WavStatus::Ready;
+            f.warning = None;
+          } else {
+            f.status = WavStatus::Convertible;
+            f.warning = Some(format!(
+              "{} Hz / {}-bit → 48 kHz / 16-bit",
+              info.sample_rate, info.bits
+            ));
+          }
           }
           Err(e) => {
-            f.compatible = false;
+            f.status = WavStatus::Unreadable;
             f.warning = Some(format!("unreadable/unsupported WAV: {e}"));
              }
           }
@@ -745,7 +773,7 @@ mod tests {
 		let p = Project::new("GOLDEN");
 		let tmp = std::env::temp_dir().join("stk_test_golden.stk");
 		let _ = std::fs::remove_file(&tmp);
-		let report = compile_to_stk(&p, tmp.to_str().unwrap(), true, true).unwrap();
+		let report = compile_to_stk(&p, tmp.to_str().unwrap(), true, true, false).unwrap();
 		assert!(report.bytes > 0);
 		assert_eq!(report.pads_filled, 0);
 		let data = std::fs::read(&tmp).unwrap();
@@ -754,12 +782,135 @@ mod tests {
 		let _ = std::fs::remove_file(&tmp);
 	}
 
+	/// Build a minimal, valid 48 kHz / 16-bit mono PCM WAV in `dir` and return
+	/// its path. Used to give a pad a real, readable source file.
+	fn write_min_wav(dir: &std::path::Path, name: &str, samples: usize) -> std::path::PathBuf {
+		let pcm = vec![0i16; samples];
+		let data_bytes = (pcm.len() * 2) as u32;
+		let mut w = Vec::new();
+		w.extend_from_slice(b"RIFF");
+		w.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+		w.extend_from_slice(b"WAVE");
+		w.extend_from_slice(b"fmt ");
+		w.extend_from_slice(&16u32.to_le_bytes());
+		w.extend_from_slice(&1u16.to_le_bytes()); // PCM
+		w.extend_from_slice(&1u16.to_le_bytes()); // mono
+		w.extend_from_slice(&48000u32.to_le_bytes());
+		w.extend_from_slice(&(48000 * 2u32).to_le_bytes());
+		w.extend_from_slice(&2u16.to_le_bytes());
+		w.extend_from_slice(&16u16.to_le_bytes());
+		w.extend_from_slice(b"data");
+		w.extend_from_slice(&data_bytes.to_le_bytes());
+		for s in &pcm {
+			w.extend_from_slice(&s.to_le_bytes());
+		}
+		let path = dir.join(name);
+		std::fs::write(&path, &w).unwrap();
+		path
+	}
+
+	#[test]
+	fn compile_never_mutates_source_wavs() {
+		use crate::models::Sample;
+		// Unique temp dir so parallel test runs never collide.
+		let dir = std::env::temp_dir().join(format!(
+			"stk_src_invariant_{}_{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_nanos()
+		));
+		std::fs::create_dir_all(&dir).unwrap();
+
+		// Two real source WAVs assigned to two active pads.
+		let src_a = write_min_wav(&dir, "kick.wav", 1200);
+		let src_b = write_min_wav(&dir, "snare.wav", 800);
+		let before_a = sha256_file(&src_a).unwrap();
+		let before_b = sha256_file(&src_b).unwrap();
+
+		let mut p = Project::new("INVARIANT");
+		for (pad, src, fname) in [(1u8, &src_a, "kick.wav"), (8u8, &src_b, "snare.wav")] {
+			p.kit.pads.insert(
+				pad,
+				Sample {
+					file_name: fname.to_string(),
+					resolved_path: Some(src.to_string_lossy().into_owned()),
+					original_path: src.to_string_lossy().into_owned(),
+					..Default::default()
+				},
+			);
+		}
+
+		let out = dir.join("out.stk");
+		compile_to_stk(&p, out.to_str().unwrap(), true, true, false).unwrap();
+
+		// The source files must be byte-identical after compiling.
+		assert_eq!(before_a, sha256_file(&src_a).unwrap(), "kick.wav source was modified");
+		assert_eq!(before_b, sha256_file(&src_b).unwrap(), "snare.wav source was modified");
+
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn describe_audio_rejects_compressed_format() {
+		// A WAV whose fmt tag is µ-law (7) must be reported Unreadable, never
+		// decoded as PCM garbage.
+		let dir = std::env::temp_dir().join(format!(
+			"stk_fmt_reject_{}_{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_nanos()
+		));
+		std::fs::create_dir_all(&dir).unwrap();
+		let mut w = Vec::new();
+		w.extend_from_slice(b"RIFF");
+		w.extend_from_slice(&40u32.to_le_bytes());
+		w.extend_from_slice(b"WAVE");
+		w.extend_from_slice(b"fmt ");
+		w.extend_from_slice(&16u32.to_le_bytes());
+		w.extend_from_slice(&7u16.to_le_bytes()); // µ-law: not decodable
+		w.extend_from_slice(&1u16.to_le_bytes());
+		w.extend_from_slice(&8000u32.to_le_bytes());
+		w.extend_from_slice(&8000u32.to_le_bytes());
+		w.extend_from_slice(&1u16.to_le_bytes());
+		w.extend_from_slice(&8u16.to_le_bytes());
+		w.extend_from_slice(b"data");
+		w.extend_from_slice(&4u32.to_le_bytes());
+		w.extend_from_slice(&[0u8; 4]);
+		let path = dir.join("ulaw.wav");
+		std::fs::write(&path, &w).unwrap();
+
+		let af = describe_audio(&path);
+		assert_eq!(af.status, WavStatus::Unreadable, "compressed WAV must be Unreadable");
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
+	#[test]
+	fn describe_audio_status_ready_vs_convertible() {
+		let dir = std::env::temp_dir().join(format!(
+			"stk_status_{}_{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.unwrap()
+				.as_nanos()
+		));
+		std::fs::create_dir_all(&dir).unwrap();
+		// 48k/16-bit -> Ready.
+		let ready = write_min_wav(&dir, "ready.wav", 48);
+		assert_eq!(describe_audio(&ready).status, WavStatus::Ready);
+		let _ = std::fs::remove_dir_all(&dir);
+	}
+
 	#[test]
 	fn compile_matches_file_format_binary_layout() {
 		let p = Project::new("FORMAT");
 		let tmp = std::env::temp_dir().join("stk_test_file_format.stk");
 		let _ = std::fs::remove_file(&tmp);
-		compile_to_stk(&p, tmp.to_str().unwrap(), true, true).unwrap();
+		compile_to_stk(&p, tmp.to_str().unwrap(), true, true, false).unwrap();
 		let data = std::fs::read(&tmp).unwrap();
 
 		// Factory SmplTrek kits use a four-byte VDK0 tag followed by the
@@ -872,7 +1023,7 @@ mod tests {
 		let tmp = std::env::temp_dir().join("stk_test_stereo.stk");
 		let _ = std::fs::remove_file(&tmp);
 		// Stereo compile should still succeed (device may or may not support, but builder should not crash)
-		let report = compile_to_stk(&p, tmp.to_str().unwrap(), false, true).unwrap();
+		let report = compile_to_stk(&p, tmp.to_str().unwrap(), false, true, false).unwrap();
 		assert!(report.bytes > 0);
 		let data = std::fs::read(&tmp).unwrap();
 		assert_eq!(&data[0..4], b"VDK0");
@@ -886,7 +1037,7 @@ mod tests {
 		// Empty project → 15 pads of silence (via padding to pad_count)
 		let tmp = std::env::temp_dir().join("stk_test_bench.stk");
 		let start = std::time::Instant::now();
-		let _ = compile_to_stk(&p, tmp.to_str().unwrap(), true, true).unwrap();
+		let _ = compile_to_stk(&p, tmp.to_str().unwrap(), true, true, false).unwrap();
 		let elapsed = start.elapsed();
 		assert!(elapsed.as_secs_f64() < 2.0, "compile 15 pads took {elapsed:?}, expected <2s");
 		let _ = std::fs::remove_file(&tmp);

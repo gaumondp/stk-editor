@@ -1,6 +1,6 @@
 [package]
 name = "smpltrek-kit-builder"
-version = "0.2.0"
+version = "0.3.0"
 description = "STK Forge"
 authors = ["STK Forge"]
 edition = "2021"

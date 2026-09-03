@@ -43,7 +43,7 @@ test.describe('Critical paths (S17)', () => {
 						if (command === 'cmd_list_wavs') {
 							return [{
 								name: 'kick.wav', path: '/fixtures/kick.wav', ext: 'wav', size: 42,
-								durationMs: 250, sampleRate: 48000, channels: 1, bits: 16, compatible: true
+								durationMs: 250, sampleRate: 48000, channels: 1, bits: 16, status: 'ready'
 							}];
 						}
 						if (command === 'cmd_get_profile') {
@@ -1329,4 +1329,122 @@ test('35. SD Card Reader invalid report offers another card selection', async ({
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('No SmplTrek folder in the selected location')).toBeVisible();
 	await expect(dialog.getByRole('button', { name: 'Choose another card…' })).toBeVisible();
+});
+
+// --- WAV compatibility (v0.3.0): three-state pill, legend, no strike-through ---
+
+/**
+ * Install a Tauri mock whose folder listing returns three WAVs, one per
+ * compatibility state, plus the profile/recent/validate stubs the editor needs.
+ */
+async function mockWavStatuses(page: Page) {
+	await page.addInitScript(() => {
+		Object.defineProperty(window, '__TAURI_INTERNALS__', {
+			value: {
+				metadata: { currentWindow: { label: 'main' } },
+				transformCallback: () => 1,
+				unregisterCallback: () => {},
+				invoke: async (command: string) => {
+					if (command === 'plugin:dialog|open') return '/fixtures';
+					if (command === 'cmd_list_wavs') {
+						return [
+							{ name: 'ready.wav', path: '/fixtures/ready.wav', ext: 'wav', size: 42, durationMs: 250, sampleRate: 48000, channels: 1, bits: 16, status: 'ready' },
+							{ name: 'hi.wav', path: '/fixtures/hi.wav', ext: 'wav', size: 42, durationMs: 250, sampleRate: 44100, channels: 2, bits: 24, status: 'convertible', warning: '44100 Hz / 24-bit → 48 kHz / 16-bit' },
+							{ name: 'bad.wav', path: '/fixtures/bad.wav', ext: 'wav', size: 42, durationMs: 0, sampleRate: 0, channels: 0, bits: 0, status: 'unreadable', warning: 'unsupported WAV format tag: 7 (compressed or non-PCM)' }
+						];
+					}
+					if (command === 'cmd_get_profile') {
+						return { pad_count: 16, active_pads: Array.from({ length: 15 }, (_, index) => index + 1), special_pads: [16], name: 'SmplTrek' };
+					}
+					if (command === 'cmd_load_recent') return { entries: [] };
+					if (command === 'cmd_validate') return { errors: [], warnings: [] };
+					return undefined;
+				}
+			}
+		});
+	});
+}
+
+test('36. WAV rows show a three-state pill and no strike-through', async ({ page }) => {
+	await mockWavStatuses(page);
+	await startNewKit(page);
+	await page.getByRole('button', { name: 'Choose folder…' }).click();
+
+	// One pill per state, addressed by class.
+	await expect(page.locator('.file-row .pill.ready')).toHaveCount(1);
+	await expect(page.locator('.file-row .pill.convertible')).toHaveCount(1);
+	await expect(page.locator('.file-row .pill.unreadable')).toHaveCount(1);
+
+	// The old strike-through treatment is gone: no row carries the removed
+	// `.missing` class, and no name is line-through.
+	await expect(page.locator('.file-row.missing')).toHaveCount(0);
+	const decoration = await page
+		.locator('.file-row', { hasText: 'bad.wav' })
+		.locator('.name')
+		.evaluate((el) => getComputedStyle(el).textDecorationLine);
+	expect(decoration).toBe('none');
+});
+
+test('37. Compatibility legend is always visible with the read-analysis note', async ({ page }) => {
+	await mockWavStatuses(page);
+	await startNewKit(page);
+	await page.getByRole('button', { name: 'Choose folder…' }).click();
+
+	const legend = page.locator('.legend');
+	await expect(legend).toBeVisible();
+	await expect(legend).toContainText('Ready');
+	await expect(legend).toContainText('Converted on compile');
+	await expect(legend).toContainText('Incompatible');
+	await expect(legend).toContainText('not a guarantee the conversion will succeed');
+});
+
+test('38. Compiling with an unreadable pad shows the modal naming empty pads', async ({ page }) => {
+	// A yellow (convertible) file assigned, plus a compile that the backend
+	// refuses because a pad is unreadable — the dialog must name the empty pads.
+	await page.addInitScript(() => {
+		const askCalls: Array<{ message: string; options: unknown }> = [];
+		(window as unknown as { __askCalls: typeof askCalls }).__askCalls = askCalls;
+		Object.defineProperty(window, '__TAURI_INTERNALS__', {
+			value: {
+				metadata: { currentWindow: { label: 'main' } },
+				transformCallback: () => 1,
+				unregisterCallback: () => {},
+				invoke: async (command: string, args?: Record<string, unknown>) => {
+					if (command === 'cmd_get_profile') {
+						return { pad_count: 16, active_pads: Array.from({ length: 15 }, (_, index) => index + 1), special_pads: [16], name: 'SmplTrek' };
+					}
+					if (command === 'cmd_load_recent') return { entries: [] };
+					if (command === 'cmd_validate') return { errors: [], warnings: [] };
+					if (command === 'plugin:dialog|save') return '/out/kit.stk';
+					if (command === 'plugin:fs|exists') return false;
+					if (command === 'plugin:dialog|ask' || command === 'plugin:dialog|message') {
+						(window as unknown as { __askCalls: typeof askCalls }).__askCalls.push({
+							message: String((args as { message?: string })?.message ?? ''),
+							options: (args as { options?: unknown })?.options
+						});
+						// Decline "Compile without them" so the flow stops at the modal.
+						return false;
+					}
+					if (command === 'cmd_compile') {
+						if ((args as { skipUnreadable?: boolean })?.skipUnreadable) {
+							return { output_path: '/out/kit-incomplete.stk', bytes: 100, pads_filled: 0, warnings: [] };
+						}
+						throw 'UNREADABLE_PADS:[{"pad":7,"fileName":"bad.wav","reason":"unsupported WAV format tag: 7 (compressed or non-PCM)"}]';
+					}
+					return undefined;
+				}
+			}
+		});
+	});
+	await startNewKit(page);
+	await chooseMenuItem(page, 'Export', 'Compile to .stk…');
+
+	// The unreadable-pads dialog message reached the ask() bridge, naming the
+	// pad and the empty-pads line.
+	await expect
+		.poll(async () => page.evaluate(() => (window as unknown as { __askCalls: Array<{ message: string }> }).__askCalls.map((c) => c.message).join('\n')))
+		.toContain('bad.wav');
+	await expect
+		.poll(async () => page.evaluate(() => (window as unknown as { __askCalls: Array<{ message: string }> }).__askCalls.map((c) => c.message).join('\n')))
+		.toContain('Pads 7 will be empty');
 });

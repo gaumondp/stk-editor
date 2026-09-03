@@ -188,14 +188,18 @@ fn cmd_search_candidates(file_name: String, base_path: String, sha256: Option<St
 /// Compile `project` to a `.stk` at `output_path` (`mono`/`overwrite` control
 /// channel count and clobbering). Returns a compile report; errors on
 /// validation failure, an existing output, a missing sample, or I/O error.
+/// When `skip_unreadable` is false, an unreadable pad aborts the compile and
+/// the offending pads are returned in the error (UNREADABLE_PADS: prefix);
+/// when true, those pads are written as silence.
 #[tauri::command]
 fn cmd_compile(
    project: Project,
    output_path: String,
    mono: bool,
-   overwrite: bool
+   overwrite: bool,
+   skip_unreadable: bool
 ) -> Result<CompileReport, String> {
-   lib::compile_to_stk(&project, &output_path, mono, overwrite)
+   lib::compile_to_stk(&project, &output_path, mono, overwrite, skip_unreadable)
 }
 
 /// Export `project` to an SD-card layout described by `opts`. Returns the list

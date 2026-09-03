@@ -70,7 +70,11 @@
 			const savedWidth = Number(localStorage.getItem(WIDTH_STORAGE_KEY));
 			if (Number.isFinite(savedWidth)) panelWidth = clampPanelWidth(savedWidth / uiScaleFactor());
 			else panelWidth = clampPanelWidth(panelWidth);
-			if (dir) void load();
+			// The last-used folder is restored for display, but NOT scanned on
+			// mount: auto-scanning a folder under ~/Documents at startup triggers
+			// the macOS permission prompt (and re-fires it in a loop) before the
+			// user has asked for anything. The scan runs only when the user opens
+			// or refreshes the folder — the action that legitimately needs access.
 		} catch {}
 
 		return () => activeResizeCleanup?.();
@@ -336,6 +340,13 @@
 			>
 		</fieldset>
 
+		<div class="legend" aria-label={tr('explorer.legend.title')}>
+			<span class="legend-item"><span class="pill ready"></span>{tr('explorer.legend.ready')}</span>
+			<span class="legend-item"><span class="pill convertible"></span>{tr('explorer.legend.convertible')}</span>
+			<span class="legend-item"><span class="pill unreadable"></span>{tr('explorer.legend.unreadable')}</span>
+			<span class="legend-note">{tr('explorer.legend.note')}</span>
+		</div>
+
 		<div class="file-list" role="table">
 			<div class="file-header" role="row" style={`grid-template-columns: ${fileGridTemplate};`}>
 				<span role="columnheader">{tr('explorer.name')}</span>
@@ -346,13 +357,13 @@
 			</div>
 			{#each filtered as f (f.path)}
 				<div
-					class="file-row {f.compatible ? '' : 'missing'} {$previewingPath === f.path ? 'playing' : ''}"
+					class="file-row {$previewingPath === f.path ? 'playing' : ''}"
 					role="row"
 					style={`grid-template-columns: ${fileGridTemplate};`}
 					onmousedown={(event) => handleMouseDown(event, f)}
 					ondblclick={() => preview(f)}
 					onclick={() => handleFileClick(f)}
-					title={`${f.path}\n${f.compatible ? 'compatible' : (f.warning ?? '')}\n${f.modified ? fmtDate(f.modified) : ''}`}
+					title={`${f.path}\n${tr(`explorer.status.${f.status}`)}${f.warning ? `\n${f.warning}` : ''}${f.modified ? `\n${fmtDate(f.modified)}` : ''}`}
 					tabindex="0"
 					onkeydown={(e) => {
 						if (e.key === 'Enter' || e.key === ' ') preview(f);
@@ -362,7 +373,10 @@
 					{#if visibleColumns.size}<span class="meta" role="cell">{fmtSize(f.size)}</span>{/if}
 					{#if visibleColumns.duration}<span class="meta" role="cell">{fmtDuration(f.durationMs)}</span>{/if}
 					{#if visibleColumns.date}<span class="meta" role="cell">{fmtDate(f.modified)}</span>{/if}
-					<span class="dot {f.compatible ? 'ok' : 'warn'}" title={f.warning ?? ''} aria-label={tr('explorer.play')}
+					<span
+						class="pill {f.status}"
+						title={tr(`explorer.status.${f.status}`)}
+						aria-label={tr(`explorer.status.${f.status}`)}
 					></span>
 				</div>
 			{/each}
@@ -595,13 +609,6 @@
 		background: rgba(74, 144, 210, 0.15);
 		outline: 1px solid var(--accent-2, #4a90d2);
 	}
-	.file-row.missing {
-		background: rgba(231, 76, 60, 0.08);
-	}
-	.file-row.missing .name {
-		text-decoration: line-through;
-		text-decoration-thickness: 2px;
-	}
 	.name {
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -612,18 +619,45 @@
 		font-size: 10px;
 		white-space: nowrap;
 	}
-	.dot {
+	.pill {
 		width: 10px;
 		height: 10px;
 		border-radius: 50%;
 		border: none;
 		flex-shrink: 0;
+		display: inline-block;
 	}
-	.dot.ok {
+	.pill.ready {
 		background: var(--ok, #4caf50);
 	}
-	.dot.warn {
+	.pill.convertible {
 		background: var(--warn, #f0ad4e);
+	}
+	.pill.unreadable {
+		background: var(--err, #e74c3c);
+	}
+	.legend {
+		display: flex;
+		flex: 0 1 auto;
+		min-height: 0;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px 12px;
+		padding: 6px 2px;
+		font-size: 10px;
+		color: var(--fg-dim, #9aa0a6);
+		overflow: hidden;
+	}
+	.legend-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		white-space: nowrap;
+	}
+	.legend-note {
+		flex-basis: 100%;
+		font-style: italic;
+		line-height: 1.3;
 	}
 	.empty {
 		padding: 8px 6px;

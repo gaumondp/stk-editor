@@ -820,6 +820,7 @@ mod extract_tests {
 			output_path: stk_path.to_string_lossy().into_owned(),
 			mono: true,
 			overwrite: true,
+			skip_unreadable: false,
 		}).unwrap();
 		let bytes = std::fs::read(&stk_path).unwrap();
 		(bytes, tmp)
